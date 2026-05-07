@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+*.log
+models/*.pth
+models/*.onnx
+!models/.gitkeep

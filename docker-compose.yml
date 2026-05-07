@@ -17,5 +17,29 @@ services:
       timeout: 5s
       retries: 5
 
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: synthdetect-ml
+    restart: unless-stopped
+    environment:
+      MODEL_PATH: /app/models/efficientnet_b0_synthdetect.pth
+      MODEL_VERSION: efficientnet_b0_v1.0
+      DEVICE: cpu
+      HOST: 0.0.0.0
+      PORT: 8000
+      MAX_FILE_SIZE_MB: 10
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ml-service/models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
 volumes:
   postgres_data:
