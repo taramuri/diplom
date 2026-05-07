@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+*.log
+.env
+.env.local
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Project
+uploads/
+models/*.pth
+models/*.onnx
