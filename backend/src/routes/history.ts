@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { getHistory } from '../controllers/historyController';
 
 const router = Router();
 
-// TODO: реалізуємо разом з analyze
-router.get('/', authenticate, (_req, res) => {
-  res.status(501).json({ error: 'Not implemented yet' });
-});
+router.get('/', authenticate, getHistory);
 
 export default router;

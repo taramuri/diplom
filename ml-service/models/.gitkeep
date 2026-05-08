@@ -1,3 +1,0 @@
-# Сюди кладеться натренована модель: efficientnet_b0_synthdetect.pth
-# Файл генерується через ml-training/training_notebook.ipynb (Colab).
-# .pth файли в gitignore — не комітимо великі бінарники в репо.

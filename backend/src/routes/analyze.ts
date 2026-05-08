@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { uploadImage } from '../middleware/upload';
+import {
+  analyze,
+  getAnalysis,
+  getHeatmap,
+} from '../controllers/analyzeController';
 
 const router = Router();
 
-// TODO: реалізуємо коли буде готовий ML-сервіс
-router.post('/', authenticate, (_req, res) => {
-  res.status(501).json({ error: 'Not implemented yet — waiting for ML service' });
-});
-
-router.get('/:id', authenticate, (_req, res) => {
-  res.status(501).json({ error: 'Not implemented yet' });
-});
+router.post('/', authenticate, uploadImage.single('image'), analyze);
+router.get('/:id', authenticate, getAnalysis);
+router.get('/:id/heatmap', authenticate, getHeatmap);
 
 export default router;
