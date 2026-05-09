@@ -5,15 +5,23 @@ from torchvision import transforms
 import torch
 
 
-# ImageNet статистика — використовується при тренуванні pretrained EfficientNet
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
 def build_eval_transform(image_size: int) -> transforms.Compose:
-    """Будує pipeline трансформацій для inference."""
+    """
+    Стандартна ImageNet-схема evaluation:
+    1. Resize до 256 по коротшій стороні (зберігає aspect ratio)
+    2. CenterCrop до 224×224 (квадрат з центру)
+
+    Це не сплющує неквадратні зображення.
+    """
+    resize_to = int(image_size * 256 / 224)  # 256 для image_size=224
+
     return transforms.Compose([
-        transforms.Resize((image_size, image_size)),
+        transforms.Resize(resize_to), 
+        transforms.CenterCrop(image_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
