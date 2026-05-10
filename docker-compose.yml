@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - synthdetect
 
   ml-service:
     build:
@@ -24,8 +26,8 @@ services:
     container_name: synthdetect-ml
     restart: unless-stopped
     environment:
-      MODEL_PATH: /app/models/efficientnet_b0_synthdetect.pth
-      MODEL_VERSION: efficientnet_b0_v1.0
+      MODEL_PATH: /app/models/efficientnet_b0_synthdetect_v2.pth
+      MODEL_VERSION: efficientnet_b0_v2.0_finetuned
       DEVICE: cpu
       HOST: 0.0.0.0
       PORT: 8000
@@ -40,6 +42,63 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+    networks:
+      - synthdetect
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: synthdetect-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # БД
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: synthdetect
+      DB_USER: synthdetect
+      DB_PASSWORD: synthdetect_dev_pass
+      # JWT
+      JWT_SECRET: change_me_to_a_long_random_string_in_production_at_least_32_chars
+      JWT_EXPIRES_IN: 24h
+      # ML-сервіс (
+      ML_SERVICE_URL: http://ml-service:8000
+      # Файли
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE_MB: 10
+      # CORS — frontend на 8080
+      CORS_ORIGIN: http://localhost:8080
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend_uploads:/app/uploads
+    networks:
+      - synthdetect
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: synthdetect-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - synthdetect
 
 volumes:
   postgres_data:
+  backend_uploads:
+
+networks:
+  synthdetect:
+    driver: bridge
