@@ -2,12 +2,20 @@ export interface User {
   id: number;
   email: string;
   role: 'user' | 'admin';
+  name: string | null;
+  has_avatar: boolean;
+  email_verified: boolean;
   created_at: string;
 }
 
 export interface AuthResponse {
   user: User;
   token: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  email: string;
 }
 
 export type AnalysisStatus = 'pending' | 'completed' | 'failed';

@@ -75,6 +75,14 @@ services:
       MAX_UPLOAD_SIZE_MB: 10
       # CORS — frontend на 8080
       CORS_ORIGIN: http://localhost:8080
+
+      APP_NAME: SynthDetect
+      SMTP_HOST: smtp-relay.brevo.com
+      SMTP_PORT: 587
+      SMTP_USER: aadbc1001@smtp-brevo.com
+      SMTP_PASS: xsmtpsib-e568d43b8d8b7d72728b09803c2b59b32fec17e575c4ba9ab651be783d0ed26c-VRjmJD242aWNhXRm
+      SMTP_FROM: SynthDetect <synthdetect@ukr.net>
+      FRONTEND_URL: http://localhost:8080
     ports:
       - "3000:3000"
     volumes:

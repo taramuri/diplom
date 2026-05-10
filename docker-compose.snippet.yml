@@ -1,0 +1,16 @@
+# Додай ці env vars у backend сервіс у docker-compose.yml:
+
+backend:
+  environment:
+    # ... існуючі змінні ...
+
+    # SMTP (Brevo)
+    APP_NAME: SynthDetect
+    SMTP_HOST: smtp-relay.brevo.com
+    SMTP_PORT: 587
+    SMTP_USER: ${SMTP_USER}              # з .env у корені
+    SMTP_PASS: ${SMTP_PASS}              # з .env у корені
+    SMTP_FROM: ${SMTP_FROM:-SynthDetect <noreply@yourdomain.com>}
+
+    # URL фронта для побудови verification/reset посилань
+    FRONTEND_URL: http://localhost:8080

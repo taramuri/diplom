@@ -4,6 +4,7 @@ import path from 'path';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const IMAGES_DIR = path.join(UPLOAD_DIR, 'images');
 const HEATMAPS_DIR = path.join(UPLOAD_DIR, 'heatmaps');
+const AVATARS_DIR = path.join(UPLOAD_DIR, 'avatars');
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -15,10 +16,11 @@ async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
 }
 
-/**
- * Зберігає завантажене зображення на диск.
- * Шлях: uploads/images/{userId}/{hash}.{ext}
- */
+export function mimeToExt(mimetype: string): string {
+  return MIME_TO_EXT[mimetype] || 'bin';
+}
+
+/** Зберігає завантажене зображення (для аналізу) на диск. */
 export async function saveImage(
   buffer: Buffer,
   userId: number,
@@ -27,16 +29,13 @@ export async function saveImage(
 ): Promise<string> {
   const userDir = path.join(IMAGES_DIR, String(userId));
   await ensureDir(userDir);
-  const ext = MIME_TO_EXT[mimetype] || 'bin';
+  const ext = mimeToExt(mimetype);
   const filepath = path.join(userDir, `${hash}.${ext}`);
   await fs.writeFile(filepath, buffer);
   return filepath;
 }
 
-/**
- * Декодує base64 PNG (з ML-сервісу) і зберігає на диск.
- * Шлях: uploads/heatmaps/{userId}/{analysisId}.png
- */
+/** Декодує base64 PNG (з ML-сервісу) і зберігає на диск. */
 export async function saveHeatmap(
   base64Png: string,
   userId: number,
@@ -49,9 +48,32 @@ export async function saveHeatmap(
   return filepath;
 }
 
-/**
- * Читає файл теплокарти з диска для віддачі клієнту.
- */
-export async function readHeatmap(filepath: string): Promise<Buffer> {
+/** Зберігає avatar (фото профілю) на диск. */
+export async function saveAvatar(
+  buffer: Buffer,
+  userId: number,
+  mimetype: string
+): Promise<string> {
+  await ensureDir(AVATARS_DIR);
+  const ext = mimeToExt(mimetype);
+  // Стираємо попередні аватари будь-якого розширення
+  for (const oldExt of Object.values(MIME_TO_EXT)) {
+    const oldPath = path.join(AVATARS_DIR, `${userId}.${oldExt}`);
+    try {
+      await fs.unlink(oldPath);
+    } catch {
+      // не існує — ок
+    }
+  }
+  const filepath = path.join(AVATARS_DIR, `${userId}.${ext}`);
+  await fs.writeFile(filepath, buffer);
+  return filepath;
+}
+
+/** Читає файл за шляхом (heatmap або avatar). */
+export async function readFileBuffer(filepath: string): Promise<Buffer> {
   return fs.readFile(filepath);
 }
+
+// Backwards compat alias
+export const readHeatmap = readFileBuffer;

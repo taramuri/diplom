@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { resendVerification } from '../api/auth';
 
 interface LocationState {
   from?: { pathname: string };
@@ -12,6 +13,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendStatus, setResendStatus] = useState<string | null>(null);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -21,18 +24,34 @@ export function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
+    setResendStatus(null);
     setIsSubmitting(true);
     try {
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Помилка входу');
+        if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+          setNeedsVerification(true);
+          setError('Email ще не підтверджено. Перевір пошту або надішли лист повторно.');
+        } else {
+          setError(err.response?.data?.error ?? 'Помилка входу');
+        }
       } else {
         setError('Невідома помилка');
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      await resendVerification(email);
+      setResendStatus('Лист надіслано. Перевір пошту (включно з папкою "Спам").');
+    } catch {
+      setResendStatus('Не вдалось надіслати — спробуй пізніше.');
     }
   };
 
@@ -65,7 +84,6 @@ export function LoginPage() {
               required
               minLength={8}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
-              placeholder="мінімум 8 символів"
               autoComplete="current-password"
             />
           </div>
@@ -73,6 +91,19 @@ export function LoginPage() {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
               {error}
+            </div>
+          )}
+
+          {needsVerification && (
+            <div className="bg-amber-50 border border-amber-200 px-4 py-3 rounded text-sm">
+              <button
+                type="button"
+                onClick={handleResend}
+                className="text-primary-700 hover:text-primary-900 font-medium underline"
+              >
+                Надіслати лист підтвердження повторно
+              </button>
+              {resendStatus && <p className="mt-2 text-xs text-gray-600">{resendStatus}</p>}
             </div>
           )}
 
@@ -85,15 +116,25 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-600 mt-6">
-          Ще не зареєстрована?{' '}
-          <Link
-            to="/register"
-            className="text-primary-700 hover:text-primary-900 font-medium"
-          >
-            Створити акаунт
-          </Link>
-        </p>
+        <div className="text-center text-sm text-gray-600 mt-6 space-y-2">
+          <p>
+            <Link
+              to="/forgot-password"
+              className="text-primary-700 hover:text-primary-900"
+            >
+              Забули пароль?
+            </Link>
+          </p>
+          <p>
+            Ще не зареєстровані?{' '}
+            <Link
+              to="/register"
+              className="text-primary-700 hover:text-primary-900 font-medium"
+            >
+              Створити акаунт
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

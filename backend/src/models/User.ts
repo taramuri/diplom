@@ -8,12 +8,32 @@ export interface UserAttributes {
   email: string;
   password_hash: string;
   role: UserRole;
+  name: string | null;
+  avatar_path: string | null;
+  email_verified: boolean;
+  verification_token: string | null;
+  verification_token_expires: Date | null;
+  password_reset_token: string | null;
+  password_reset_expires: Date | null;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface UserCreationAttributes
-  extends Optional<UserAttributes, 'id' | 'role' | 'created_at' | 'updated_at'> {}
+  extends Optional<
+    UserAttributes,
+    | 'id'
+    | 'role'
+    | 'name'
+    | 'avatar_path'
+    | 'email_verified'
+    | 'verification_token'
+    | 'verification_token_expires'
+    | 'password_reset_token'
+    | 'password_reset_expires'
+    | 'created_at'
+    | 'updated_at'
+  > {}
 
 export class User
   extends Model<UserAttributes, UserCreationAttributes>
@@ -23,15 +43,25 @@ export class User
   declare email: string;
   declare password_hash: string;
   declare role: UserRole;
+  declare name: string | null;
+  declare avatar_path: string | null;
+  declare email_verified: boolean;
+  declare verification_token: string | null;
+  declare verification_token_expires: Date | null;
+  declare password_reset_token: string | null;
+  declare password_reset_expires: Date | null;
   declare readonly created_at: Date;
   declare readonly updated_at: Date;
 
-  /** Безпечне представлення для відповіді API (без password_hash) */
+  /** Безпечне представлення для відповіді API (без приватних полів). */
   toSafeJSON() {
     return {
       id: this.id,
       email: this.email,
       role: this.role,
+      name: this.name,
+      has_avatar: !!this.avatar_path,
+      email_verified: this.email_verified,
       created_at: this.created_at,
     };
   }
@@ -39,26 +69,30 @@ export class User
 
 User.init(
   {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     email: {
       type: DataTypes.STRING(255),
       allowNull: false,
       unique: true,
       validate: { isEmail: true },
     },
-    password_hash: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
+    password_hash: { type: DataTypes.STRING(255), allowNull: false },
     role: {
       type: DataTypes.ENUM('user', 'admin'),
       defaultValue: 'user',
       allowNull: false,
     },
+    name: { type: DataTypes.STRING(100), allowNull: true },
+    avatar_path: { type: DataTypes.STRING(500), allowNull: true },
+    email_verified: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    verification_token: { type: DataTypes.STRING(64), allowNull: true },
+    verification_token_expires: { type: DataTypes.DATE, allowNull: true },
+    password_reset_token: { type: DataTypes.STRING(64), allowNull: true },
+    password_reset_expires: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false },
     updated_at: { type: DataTypes.DATE, allowNull: false },
   },
