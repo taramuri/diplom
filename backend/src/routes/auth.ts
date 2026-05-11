@@ -11,6 +11,7 @@ import {
 } from '../controllers/authController';
 import {
   updateProfile,
+  changePassword,
   uploadAvatarHandler,
   getAvatar,
   deleteAvatar,
@@ -36,16 +37,17 @@ const verifyEmailSchema = Joi.object({
   token: Joi.string().length(64).hex().required(),
 });
 
-const resendSchema = Joi.object({
-  email: Joi.string().email().required(),
-});
-
-const forgotPasswordSchema = Joi.object({
+const emailOnlySchema = Joi.object({
   email: Joi.string().email().required(),
 });
 
 const resetPasswordSchema = Joi.object({
   token: Joi.string().length(64).hex().required(),
+  new_password: Joi.string().min(8).max(128).required(),
+});
+
+const changePasswordSchema = Joi.object({
+  current_password: Joi.string().required(),
   new_password: Joi.string().min(8).max(128).required(),
 });
 
@@ -61,14 +63,15 @@ router.get('/me', authenticate, getMe);
 
 // Email verification
 router.post('/verify-email', validateBody(verifyEmailSchema), verifyEmail);
-router.post('/resend-verification', validateBody(resendSchema), resendVerification);
+router.post('/resend-verification', validateBody(emailOnlySchema), resendVerification);
 
-// Password reset
-router.post('/forgot-password', validateBody(forgotPasswordSchema), forgotPassword);
+// Password reset (через email)
+router.post('/forgot-password', validateBody(emailOnlySchema), forgotPassword);
 router.post('/reset-password', validateBody(resetPasswordSchema), resetPassword);
 
 // Profile
 router.patch('/me', authenticate, validateBody(updateProfileSchema), updateProfile);
+router.post('/me/password', authenticate, validateBody(changePasswordSchema), changePassword);
 router.post('/me/avatar', authenticate, uploadAvatar.single('avatar'), uploadAvatarHandler);
 router.get('/me/avatar', authenticate, getAvatar);
 router.delete('/me/avatar', authenticate, deleteAvatar);

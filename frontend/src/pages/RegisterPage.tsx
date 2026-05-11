@@ -2,6 +2,8 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
+import { checkPasswordStrength } from '../utils/passwordStrength';
 
 export function RegisterPage() {
   const [name, setName] = useState('');
@@ -16,17 +18,27 @@ export function RegisterPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Перевірка пароля на клієнті перед відправкою
+    const strength = checkPasswordStrength(password, { email, name });
+    if (!strength.isValid) {
+      setError('Виправ помилки в паролі: ' + strength.issues.join('; '));
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await register(email, password, name || undefined);
       navigate(`/check-email?email=${encodeURIComponent(email)}`, { replace: true });
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        const details = err.response?.data?.details;
-        if (Array.isArray(details)) {
-          setError(details.join('; '));
+        const data = err.response?.data;
+        if (data?.details?.issues && Array.isArray(data.details.issues)) {
+          setError('Пароль: ' + data.details.issues.join('; '));
+        } else if (Array.isArray(data?.details)) {
+          setError(data.details.join('; '));
         } else {
-          setError(err.response?.data?.error ?? 'Помилка реєстрації');
+          setError(data?.error ?? 'Помилка реєстрації');
         }
       } else {
         setError('Невідома помилка');
@@ -84,6 +96,7 @@ export function RegisterPage() {
               placeholder="мінімум 8 символів"
               autoComplete="new-password"
             />
+            <PasswordStrengthMeter password={password} userInfo={{ email, name }} />
           </div>
 
           {error && (
@@ -102,7 +115,7 @@ export function RegisterPage() {
         </form>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          Вже маєте акаунт?{' '}
+          Вже маєш акаунт?{' '}
           <Link to="/login" className="text-primary-700 hover:text-primary-900 font-medium">
             Увійти
           </Link>

@@ -27,6 +27,8 @@ export async function getHistory(
       offset,
     });
 
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
     const items = rows.map((a) => ({
       id: a.id,
       filename: a.filename,
@@ -34,8 +36,9 @@ export async function getHistory(
       verdict: a.verdict,
       probability_synthetic: a.probability_synthetic,
       processing_time_ms: a.processing_time_ms,
+      image_url: `${baseUrl}/api/analyze/${a.id}/image`,
       heatmap_url: a.heatmap_path
-        ? `${req.protocol}://${req.get('host')}/api/analyze/${a.id}/heatmap`
+        ? `${baseUrl}/api/analyze/${a.id}/heatmap`
         : null,
       created_at: a.created_at,
     }));

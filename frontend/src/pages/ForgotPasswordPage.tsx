@@ -7,18 +7,22 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setErrorCode(null);
     setIsSubmitting(true);
     try {
       await forgotPassword(email);
       setSubmitted(true);
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Помилка');
+        const data = err.response?.data;
+        setError(data?.error ?? 'Помилка');
+        setErrorCode(data?.details?.code ?? data?.code ?? null);
       } else {
         setError('Невідома помилка');
       }
@@ -30,16 +34,17 @@ export function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-primary-900 mb-2">Забули пароль?</h1>
+        <h1 className="text-2xl font-bold text-primary-900 mb-2">Забув пароль?</h1>
         <p className="text-gray-600 mb-6">
-          Введіть ваш email. Ми надішлемо інструкції для відновлення пароля.
+          Введи email — ми надішлемо посилання для скидання паролю.
         </p>
 
         {submitted ? (
           <div className="bg-green-50 border border-green-200 px-4 py-4 rounded text-sm text-green-800">
-            <p className="font-medium mb-1">Лист надіслано (якщо email зареєстровано)</p>
+            <p className="font-medium mb-1">✓ Лист надіслано</p>
             <p className="text-green-700">
-              Перевір пошту — клікни посилання у листі для скидання паролю. Посилання дійсне 1 годину.
+              Перевір пошту — клікни посилання у листі для скидання паролю. Посилання
+              дійсне 1 годину.
             </p>
             <Link
               to="/login"
@@ -64,8 +69,18 @@ export function ForgotPasswordPage() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-                  {error}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+                  <p>{error}</p>
+                  {errorCode === 'EMAIL_NOT_FOUND' && (
+                    <p className="mt-2 text-xs">
+                      <Link
+                        to="/register"
+                        className="text-primary-700 hover:text-primary-900 font-medium underline"
+                      >
+                        Зареєструватись →
+                      </Link>
+                    </p>
+                  )}
                 </div>
               )}
 

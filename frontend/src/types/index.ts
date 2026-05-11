@@ -29,6 +29,7 @@ export interface Analysis {
   probability_synthetic: number | null;
   model_version: string | null;
   processing_time_ms: number | null;
+  image_url: string;
   heatmap_url: string | null;
   created_at: string;
   cached?: boolean;

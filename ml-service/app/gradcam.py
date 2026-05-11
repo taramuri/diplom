@@ -1,11 +1,17 @@
-"""Генерація теплової карти Grad-CAM з накладанням на оригінал."""
+"""Генерація теплової карти Grad-CAM зі збереженням aspect ratio оригіналу."""
 import io
 import numpy as np
+import cv2
 from PIL import Image
 import torch
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
+
+
+# Максимальна довжина більшої сторони у вихідному PNG.
+# Більший розмір — гарніше але важчий файл.
+MAX_DISPLAY_DIMENSION = 800
 
 
 def generate_heatmap(
@@ -14,35 +20,59 @@ def generate_heatmap(
     input_tensor: torch.Tensor,
     target_class: int,
     original_image: Image.Image,
-    image_size: int,
+    image_size: int,  # лишено для сумісності інтерфейсу, не використовується
 ) -> bytes:
     """
-    Будує Grad-CAM heatmap для заданого класу і накладає на оригінальне зображення.
+    Будує Grad-CAM heatmap для target_class і накладає на оригінал
+    із ЗБЕРЕЖЕННЯМ aspect ratio (не сплющує).
 
-    Args:
-        model: натренована модель (eval mode)
-        target_layer: останній згортковий шар (для EfficientNet-B0 — model.features[-1])
-        input_tensor: вхід у моделі (1, 3, H, W)
-        target_class: індекс класу для якого рахуємо CAM (0=FAKE для нашої моделі)
-        original_image: PIL зображення (RGB)
-        image_size: розмір вхідного зображення моделі (224)
-
-    Returns:
-        PNG-байти з накладеною теплокартою
+    Workflow:
+    1. Обчислюємо heatmap 224×224 на основі input_tensor (це те що модель бачила).
+    2. Беремо оригінал у його справжніх пропорціях.
+    3. Зменшуємо оригінал до display-розміру (≤ MAX_DISPLAY_DIMENSION по довшій стороні),
+       зберігаючи aspect ratio.
+    4. Растягуємо heatmap до тих самих пропорцій (224×224 → display_w × display_h).
+    5. Накладаємо і повертаємо PNG.
     """
     cam = GradCAM(model=model, target_layers=[target_layer])
     targets = [ClassifierOutputTarget(target_class)]
-    grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]
+    grayscale_cam = cam(input_tensor=input_tensor, targets=targets)[0]  # 224×224
 
-    # Готуємо оригінал у форматі [0, 1] np.float32
-    img_resized = original_image.resize((image_size, image_size))
-    img_np = np.array(img_resized).astype(np.float32) / 255.0
+    # Гарантуємо RGB
+    if original_image.mode != 'RGB':
+        original_image = original_image.convert('RGB')
 
-    # Накладаємо теплокарту (RGB)
-    visualization = show_cam_on_image(img_np, grayscale_cam, use_rgb=True)
+    # Display-розмір зі збереженням aspect ratio
+    orig_w, orig_h = original_image.size
+    longest = max(orig_w, orig_h)
+    if longest > MAX_DISPLAY_DIMENSION:
+        scale = MAX_DISPLAY_DIMENSION / longest
+        display_w = int(round(orig_w * scale))
+        display_h = int(round(orig_h * scale))
+    else:
+        display_w, display_h = orig_w, orig_h
+
+    # Зменшуємо оригінал
+    display_img = original_image.resize((display_w, display_h), Image.LANCZOS)
+    img_np = np.array(display_img).astype(np.float32) / 255.0
+
+    # Розтягуємо heatmap до display-розміру (з 224×224)
+    heatmap_resized = cv2.resize(
+        grayscale_cam,
+        (display_w, display_h),
+        interpolation=cv2.INTER_LINEAR,
+    )
+
+    # Накладаємо (з рекомендованим alpha 0.4)
+    visualization = show_cam_on_image(
+        img_np,
+        heatmap_resized,
+        use_rgb=True,
+        image_weight=0.6,
+    )
 
     # Кодуємо як PNG
     overlay_img = Image.fromarray(visualization)
     buf = io.BytesIO()
-    overlay_img.save(buf, format='PNG')
+    overlay_img.save(buf, format='PNG', optimize=True)
     return buf.getvalue()

@@ -1,16 +1,16 @@
-"""FastAPI ML-сервіс для виявлення синтетичних зображень."""
+"""FastAPI app — ensemble inference endpoint."""
+import io
 import logging
-import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from PIL import Image
 
-from app.config import settings
-from app.schemas import HealthResponse, ClassifyResponse
-from app.model import model_service
+from .config import settings
+from .model import ModelService
+from .schemas import ClassifyResponse, HealthResponse
 
-# Налаштування логів
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -18,106 +18,83 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+state = {'model_service': None}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle — завантажуємо модель при старті, вивантажуємо при зупинці."""
-    logger.info('Starting up ML service...')
-    try:
-        model_service.load()
-    except FileNotFoundError as e:
-        logger.warning(str(e))
-        logger.warning('Service will start, but /classify will return 503 until model is provided.')
+    logger.info("Запускаю ML-сервіс…")
+    state['model_service'] = ModelService()
+    logger.info("✓ ML-сервіс готовий")
     yield
-    logger.info('Shutting down ML service...')
+    logger.info("Завершення роботи")
 
 
 app = FastAPI(
     title='SynthDetect ML Service',
-    description='Inference service for synthetic image detection (EfficientNet-B0 + Grad-CAM)',
-    version='0.1.0',
+    description='Ансамбль детекції синтетичних зображень',
+    version='2.0',
     lifespan=lifespan,
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=['*'],
-    allow_headers=['*'],
 )
 
 
 @app.get('/health', response_model=HealthResponse)
-async def health() -> HealthResponse:
-    """Перевірка стану сервісу — використовується Docker healthcheck."""
+async def health():
+    ms: ModelService = state['model_service']
+    if ms is None or not ms.is_ready:
+        raise HTTPException(503, 'Сервіс ще не готовий')
     return HealthResponse(
-        status='ok' if model_service.is_loaded else 'degraded',
-        model_loaded=model_service.is_loaded,
-        model_version=settings.MODEL_VERSION,
-        device=str(model_service.device),
+        status='ok',
+        models_loaded=ms.loaded_model_names,
+        device=settings.DEVICE,
     )
 
 
 @app.post('/classify', response_model=ClassifyResponse)
-async def classify(file: UploadFile = File(...)) -> ClassifyResponse:
+async def classify(
+    image: Optional[UploadFile] = File(default=None),
+    file: Optional[UploadFile] = File(default=None),
+):
     """
-    Класифікує зображення як real або synthetic + повертає Grad-CAM теплокарту.
-
-    - **file**: зображення (JPEG/PNG/WebP), до MAX_FILE_SIZE_MB
+    Приймає файл під полем 'image' АБО 'file' — для сумісності з різними backend-клієнтами.
+    Тільки одне з полів має бути присутнім.
     """
-    if not model_service.is_loaded:
+    ms: ModelService = state['model_service']
+    if ms is None or not ms.is_ready:
+        raise HTTPException(503, 'Сервіс не готовий')
+
+    upload = image if image is not None else file
+    if upload is None:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Model is not loaded. Place the .pth file and restart the service.',
+            400,
+            "Файл не передано. Очікую поле 'image' або 'file' у multipart/form-data.",
         )
 
-    # Перевірка типу
-    if not file.content_type or not file.content_type.startswith('image/'):
+    # Валідація типу
+    if not upload.content_type or not upload.content_type.startswith('image/'):
+        raise HTTPException(400, f'Invalid content type: {upload.content_type}')
+
+    # Читання + валідація розміру
+    data = await upload.read()
+    size_mb = len(data) / (1024 * 1024)
+    if size_mb > settings.MAX_FILE_SIZE_MB:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'File must be an image, got content-type: {file.content_type}',
+            413,
+            f'Файл занадто великий: {size_mb:.1f} MB (максимум {settings.MAX_FILE_SIZE_MB} MB)',
         )
 
-    # Читаємо байти + перевірка розміру
-    image_bytes = await file.read()
-    if len(image_bytes) > settings.max_file_size_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f'File exceeds max size of {settings.MAX_FILE_SIZE_MB} MB',
-        )
+    # Парсинг зображення
+    try:
+        pil_image = Image.open(io.BytesIO(data))
+        pil_image.load()
+    except Exception as e:
+        raise HTTPException(400, f'Не вдалось прочитати зображення: {e}')
 
     # Inference
-    start = time.time()
     try:
-        result = model_service.classify(image_bytes)
+        result = ms.predict(pil_image)
     except Exception as e:
-        logger.exception('Classification failed')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Classification failed: {type(e).__name__}: {str(e)}',
-        )
-    elapsed_ms = int((time.time() - start) * 1000)
+        logger.exception("Inference error")
+        raise HTTPException(500, f'Помилка обробки: {e}')
 
-    logger.info(
-        f'Classified {file.filename}: {result["verdict"]} '
-        f'(p_synth={result["probability_synthetic"]:.3f}, {elapsed_ms}ms)'
-    )
-
-    return ClassifyResponse(
-        verdict=result['verdict'],
-        probability_synthetic=result['probability_synthetic'],
-        model_version=settings.MODEL_VERSION,
-        processing_time_ms=elapsed_ms,
-        heatmap_png_base64=result['heatmap_png_base64'],
-    )
-
-
-@app.get('/')
-async def root():
-    return {
-        'service': 'SynthDetect ML',
-        'version': '0.1.0',
-        'docs': '/docs',
-        'health': '/health',
-    }
+    return ClassifyResponse(**result)

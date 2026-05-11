@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Analysis } from '../types';
+import { ImagePreview } from './ImagePreview';
 import { formatProbability, formatDate } from '../utils/format';
 
 interface HistoryListProps {
@@ -7,6 +8,8 @@ interface HistoryListProps {
 }
 
 export function HistoryList({ items }: HistoryListProps) {
+  const navigate = useNavigate();
+
   if (items.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-12 text-center">
@@ -27,30 +30,44 @@ export function HistoryList({ items }: HistoryListProps) {
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-20">
+                Превʼю
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Файл
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Вердикт
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Імовірність
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Час
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Дата
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {items.map((a) => (
-              <tr key={a.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 text-sm font-medium text-gray-800 truncate max-w-xs">
+              <tr
+                key={a.id}
+                onClick={() => navigate(`/analysis/${a.id}`)}
+                className="hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <td className="px-4 py-3">
+                  <ImagePreview
+                    analysisId={a.id}
+                    className="h-12 w-12 rounded object-cover border border-gray-200"
+                    alt={a.filename}
+                  />
+                </td>
+                <td className="px-4 py-3 text-sm font-medium text-gray-800 truncate max-w-xs">
                   {a.filename}
                 </td>
-                <td className="px-6 py-3">
+                <td className="px-4 py-3">
                   {a.verdict === 'synthetic' && (
                     <span className="inline-block px-2 py-1 text-xs rounded bg-red-100 text-red-800">
                       Синтетичне
@@ -68,15 +85,15 @@ export function HistoryList({ items }: HistoryListProps) {
                     <span className="text-xs text-red-600">Помилка</span>
                   )}
                 </td>
-                <td className="px-6 py-3 text-sm font-mono">
+                <td className="px-4 py-3 text-sm font-mono">
                   {a.probability_synthetic !== null
                     ? formatProbability(a.probability_synthetic)
                     : '—'}
                 </td>
-                <td className="px-6 py-3 text-sm text-gray-600">
+                <td className="px-4 py-3 text-sm text-gray-600">
                   {a.processing_time_ms !== null ? `${a.processing_time_ms} мс` : '—'}
                 </td>
-                <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">
+                <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                   {formatDate(a.created_at)}
                 </td>
               </tr>

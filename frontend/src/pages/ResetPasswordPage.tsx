@@ -2,6 +2,8 @@ import { useState, FormEvent } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { resetPassword } from '../api/auth';
+import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
+import { checkPasswordStrength } from '../utils/passwordStrength';
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams();
@@ -23,6 +25,12 @@ export function ResetPasswordPage() {
       return;
     }
 
+    const strength = checkPasswordStrength(password);
+    if (!strength.isValid) {
+      setError('Виправ помилки в паролі: ' + strength.issues.join('; '));
+      return;
+    }
+
     if (!token) {
       setError('Токен скидання відсутній у посиланні');
       return;
@@ -35,7 +43,12 @@ export function ResetPasswordPage() {
       setTimeout(() => navigate('/login', { replace: true }), 2500);
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Помилка скидання паролю');
+        const data = err.response?.data;
+        if (data?.details?.issues && Array.isArray(data.details.issues)) {
+          setError('Пароль: ' + data.details.issues.join('; '));
+        } else {
+          setError(data?.error ?? 'Помилка скидання паролю');
+        }
       } else {
         setError('Невідома помилка');
       }
@@ -57,7 +70,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
         <h1 className="text-2xl font-bold text-primary-900 mb-2">Новий пароль</h1>
         <p className="text-gray-600 mb-6">Встанови новий пароль для свого акаунта.</p>
@@ -76,6 +89,7 @@ export function ResetPasswordPage() {
               placeholder="мінімум 8 символів"
               autoComplete="new-password"
             />
+            <PasswordStrengthMeter password={password} />
           </div>
 
           <div>
@@ -92,6 +106,9 @@ export function ResetPasswordPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
               autoComplete="new-password"
             />
+            {confirmPassword && password !== confirmPassword && (
+              <p className="text-xs text-red-600 mt-1">Паролі не співпадають</p>
+            )}
           </div>
 
           {error && (

@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { PublicOnlyRoute } from './components/PublicOnlyRoute';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { CheckEmailPage } from './pages/CheckEmailPage';
@@ -9,6 +10,7 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { AnalysisDetailPage } from './pages/AnalysisDetailPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -18,15 +20,57 @@ function App() {
       <Header />
       <main className="flex-1">
         <Routes>
-          {/* Публічні */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/check-email" element={<CheckEmailPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Тільки для неавторизованих */}
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <LoginPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicOnlyRoute>
+                <RegisterPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/check-email"
+            element={
+              <PublicOnlyRoute>
+                <CheckEmailPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/verify-email"
+            element={
+              <PublicOnlyRoute>
+                <VerifyEmailPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicOnlyRoute>
+                <ForgotPasswordPage />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <PublicOnlyRoute>
+                <ResetPasswordPage />
+              </PublicOnlyRoute>
+            }
+          />
 
-          {/* Захищені */}
+          {/* Тільки для авторизованих */}
           <Route
             path="/"
             element={
@@ -40,6 +84,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <HistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analysis/:id"
+            element={
+              <ProtectedRoute>
+                <AnalysisDetailPage />
               </ProtectedRoute>
             }
           />

@@ -17,7 +17,7 @@ def build_eval_transform(image_size: int) -> transforms.Compose:
 
     Це не сплющує неквадратні зображення.
     """
-    resize_to = int(image_size * 256 / 224)  # 256 для image_size=224
+    resize_to = int(image_size * 256 / 224)  
 
     return transforms.Compose([
         transforms.Resize(resize_to), 

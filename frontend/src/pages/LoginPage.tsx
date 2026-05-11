@@ -47,11 +47,16 @@ export function LoginPage() {
   };
 
   const handleResend = async () => {
+    setResendStatus(null);
     try {
       await resendVerification(email);
-      setResendStatus('Лист надіслано. Перевір пошту (включно з папкою "Спам").');
-    } catch {
-      setResendStatus('Не вдалось надіслати — спробуй пізніше.');
+      setResendStatus('Лист надіслано. Перевір пошту (включно з папкою «Спам»).');
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        setResendStatus(err.response?.data?.error ?? 'Не вдалось надіслати');
+      } else {
+        setResendStatus('Не вдалось надіслати');
+      }
     }
   };
 
@@ -118,19 +123,13 @@ export function LoginPage() {
 
         <div className="text-center text-sm text-gray-600 mt-6 space-y-2">
           <p>
-            <Link
-              to="/forgot-password"
-              className="text-primary-700 hover:text-primary-900"
-            >
-              Забули пароль?
+            <Link to="/forgot-password" className="text-primary-700 hover:text-primary-900">
+              Забув пароль?
             </Link>
           </p>
           <p>
-            Ще не зареєстровані?{' '}
-            <Link
-              to="/register"
-              className="text-primary-700 hover:text-primary-900 font-medium"
-            >
+            Ще не зареєстрована?{' '}
+            <Link to="/register" className="text-primary-700 hover:text-primary-900 font-medium">
               Створити акаунт
             </Link>
           </p>

@@ -27,11 +27,15 @@ services:
     restart: unless-stopped
     environment:
       MODEL_PATH: /app/models/efficientnet_b0_synthdetect_v2.pth
-      MODEL_VERSION: efficientnet_b0_v2.0_finetuned
+      MODEL_PATH_R50: /app/models/resnet50_synthdetect.pth
+      MODEL_PATH_VIT: /app/models/vit_b16_synthdetect.pth
+      MODEL_VERSION: ensemble_b0_r50_vit_v1.0
       DEVICE: cpu
       HOST: 0.0.0.0
       PORT: 8000
       MAX_FILE_SIZE_MB: 10
+      IMAGE_SIZE: 224
+      DECISION_THRESHOLD: 0.5 
     ports:
       - "8000:8000"
     volumes:
@@ -41,7 +45,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s
     networks:
       - synthdetect
 

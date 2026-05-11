@@ -1,36 +1,23 @@
-"""Pydantic-схеми запитів і відповідей."""
-from typing import Literal
+"""Pydantic-схеми для API."""
+from typing import Dict, Optional
 from pydantic import BaseModel, Field
 
 
-class HealthResponse(BaseModel):
-    """Відповідь для /health endpoint."""
-    status: Literal['ok', 'degraded'] = 'ok'
-    model_loaded: bool
-    model_version: str
-    device: str
-
-
 class ClassifyResponse(BaseModel):
-    """Результат класифікації одного зображення."""
-    verdict: Literal['real', 'synthetic'] = Field(
-        ...,
-        description='Вердикт: real — реальне зображення, synthetic — згенероване'
-    )
-    probability_synthetic: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description='Імовірність того, що зображення синтетичне (0..1)'
-    )
-    model_version: str = Field(..., description='Версія моделі що використовувалась')
-    processing_time_ms: int = Field(..., description='Час обробки в мілісекундах')
-    heatmap_png_base64: str = Field(
-        ...,
-        description='PNG з накладеною Grad-CAM теплокартою, base64-кодований'
-    )
+    """Відповідь /classify endpoint."""
+    verdict: str = Field(..., description="'real' або 'synthetic'")
+    probability_synthetic: float = Field(..., ge=0.0, le=1.0)
+    model_version: str
+    processing_time_ms: int
+    heatmap_png_base64: Optional[str] = None
+
+    # Розбивка по моделях ансамблю — опційно
+    # Якщо ансамбль з 3 моделей, повертає {"EfficientNet-B0": 0.91, "ResNet-50": 0.88, "ViT-B/16": 0.93}
+    model_predictions: Optional[Dict[str, float]] = None
 
 
-class ErrorResponse(BaseModel):
-    error: str
-    detail: str | None = None
+class HealthResponse(BaseModel):
+    """Відповідь /health endpoint."""
+    status: str
+    models_loaded: list[str]
+    device: str

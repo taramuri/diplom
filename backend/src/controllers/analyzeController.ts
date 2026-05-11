@@ -1,16 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import { Analysis } from '../models';
 import { sha256 } from '../utils/hash';
-import { saveImage, saveHeatmap, readHeatmap } from '../utils/storage';
+import { saveImage, saveHeatmap, readFileBuffer } from '../utils/storage';
 import { classifyImage } from '../services/mlClient';
 import { ApiError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
 /**
  * Будує JSON-відповідь з моделі Analysis для клієнта.
- * Не повертає image_path і heatmap_path (це деталі реалізації).
+ * Включає URL до original-image та heatmap (обидва вимагають auth).
  */
 function buildResponse(analysis: Analysis, req: Request) {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
   return {
     id: analysis.id,
     filename: analysis.filename,
@@ -19,8 +20,9 @@ function buildResponse(analysis: Analysis, req: Request) {
     probability_synthetic: analysis.probability_synthetic,
     model_version: analysis.model_version,
     processing_time_ms: analysis.processing_time_ms,
+    image_url: `${baseUrl}/api/analyze/${analysis.id}/image`,
     heatmap_url: analysis.heatmap_path
-      ? `${req.protocol}://${req.get('host')}/api/analyze/${analysis.id}/heatmap`
+      ? `${baseUrl}/api/analyze/${analysis.id}/heatmap`
       : null,
     created_at: analysis.created_at,
   };
@@ -28,17 +30,6 @@ function buildResponse(analysis: Analysis, req: Request) {
 
 /**
  * POST /api/analyze
- * Завантаження зображення → класифікація → збереження результату.
- *
- * Workflow:
- *   1. Перевірка файлу
- *   2. SHA-256 хеш для кешу
- *   3. Якщо вже аналізував це зображення — повертаємо кеш
- *   4. Зберігаємо файл на диск
- *   5. Створюємо запис у БД зі статусом pending
- *   6. Викликаємо ML-сервіс
- *   7. Зберігаємо heatmap, оновлюємо запис до completed
- *   8. Повертаємо відповідь
  */
 export async function analyze(
   req: Request,
@@ -53,7 +44,7 @@ export async function analyze(
     const userId = req.user!.user_id;
     const imageHash = sha256(req.file.buffer);
 
-    // Кеш: те саме зображення, той самий користувач, успішний результат
+    // Кеш: той самий хеш контенту + той самий юзер + completed
     const cached = await Analysis.findOne({
       where: {
         user_id: userId,
@@ -71,7 +62,6 @@ export async function analyze(
       return;
     }
 
-    // Зберегти файл на диск
     const imagePath = await saveImage(
       req.file.buffer,
       userId,
@@ -79,7 +69,6 @@ export async function analyze(
       req.file.mimetype
     );
 
-    // Запис у БД зі статусом pending
     const analysisRecord = await Analysis.create({
       user_id: userId,
       image_hash: imageHash,
@@ -88,7 +77,6 @@ export async function analyze(
       status: 'pending',
     });
 
-    // Виклик ML-сервісу
     try {
       const result = await classifyImage(
         req.file.buffer,
@@ -96,14 +84,12 @@ export async function analyze(
         req.file.mimetype
       );
 
-      // Зберегти heatmap на диск
       const heatmapPath = await saveHeatmap(
         result.heatmap_png_base64,
         userId,
         analysisRecord.id
       );
 
-      // Оновити запис у БД
       await analysisRecord.update({
         status: 'completed',
         verdict: result.verdict,
@@ -124,7 +110,6 @@ export async function analyze(
         cached: false,
       });
     } catch (mlErr) {
-      // ML впав — позначаємо запис як failed і кидаємо помилку далі
       await analysisRecord.update({ status: 'failed' });
       throw mlErr;
     }
@@ -135,7 +120,6 @@ export async function analyze(
 
 /**
  * GET /api/analyze/:id
- * Отримати результат конкретного аналізу.
  */
 export async function getAnalysis(
   req: Request,
@@ -155,7 +139,6 @@ export async function getAnalysis(
       throw new ApiError(404, 'Analysis not found');
     }
 
-    // Власник або admin
     if (analysis.user_id !== userId && req.user!.role !== 'admin') {
       throw new ApiError(403, 'Forbidden');
     }
@@ -167,8 +150,66 @@ export async function getAnalysis(
 }
 
 /**
+ * Спільна логіка для віддачі файла з аналізу (image/heatmap) з auth-check.
+ */
+async function serveAnalysisFile(
+  req: Request,
+  res: Response,
+  field: 'image_path' | 'heatmap_path',
+  errorMsg: string
+): Promise<void> {
+  const userId = req.user!.user_id;
+  const id = parseInt(req.params.id, 10);
+
+  if (isNaN(id)) {
+    throw new ApiError(400, 'Invalid analysis ID');
+  }
+
+  const analysis = await Analysis.findByPk(id);
+  if (!analysis) {
+    throw new ApiError(404, 'Analysis not found');
+  }
+
+  if (analysis.user_id !== userId && req.user!.role !== 'admin') {
+    throw new ApiError(403, 'Forbidden');
+  }
+
+  const filepath = analysis[field];
+  if (!filepath) {
+    throw new ApiError(404, errorMsg);
+  }
+
+  const buffer = await readFileBuffer(filepath);
+  const ext = filepath.split('.').pop()?.toLowerCase();
+  const contentType =
+    ext === 'png' ? 'image/png' :
+    ext === 'webp' ? 'image/webp' :
+    'image/jpeg';
+
+  res.set('Content-Type', contentType);
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.send(buffer);
+}
+
+/**
+ * GET /api/analyze/:id/image
+ * Віддає оригінал завантаженого зображення.
+ */
+export async function getImage(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    await serveAnalysisFile(req, res, 'image_path', 'Image not available');
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /api/analyze/:id/heatmap
- * Віддає PNG теплокарти з перевіркою прав доступу.
+ * Віддає PNG теплокарти.
  */
 export async function getHeatmap(
   req: Request,
@@ -176,30 +217,7 @@ export async function getHeatmap(
   next: NextFunction
 ): Promise<void> {
   try {
-    const userId = req.user!.user_id;
-    const id = parseInt(req.params.id, 10);
-
-    if (isNaN(id)) {
-      throw new ApiError(400, 'Invalid analysis ID');
-    }
-
-    const analysis = await Analysis.findByPk(id);
-    if (!analysis) {
-      throw new ApiError(404, 'Analysis not found');
-    }
-
-    if (analysis.user_id !== userId && req.user!.role !== 'admin') {
-      throw new ApiError(403, 'Forbidden');
-    }
-
-    if (!analysis.heatmap_path) {
-      throw new ApiError(404, 'Heatmap not available');
-    }
-
-    const buffer = await readHeatmap(analysis.heatmap_path);
-    res.set('Content-Type', 'image/png');
-    res.set('Cache-Control', 'private, max-age=3600');
-    res.send(buffer);
+    await serveAnalysisFile(req, res, 'heatmap_path', 'Heatmap not available');
   } catch (err) {
     next(err);
   }

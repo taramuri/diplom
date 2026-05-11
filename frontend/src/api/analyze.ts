@@ -17,9 +17,17 @@ export async function getAnalysis(id: number): Promise<Analysis> {
 }
 
 /**
- * Завантажує теплокарту як blob і повертає object URL,
- * який можна використати у <img src="...">.
- * Auth header додається автоматично через interceptor.
+ * Завантажує оригінал зображення як blob (з auth) і повертає object URL.
+ */
+export async function loadImage(analysisId: number): Promise<string> {
+  const response = await apiClient.get(`/analyze/${analysisId}/image`, {
+    responseType: 'blob',
+  });
+  return URL.createObjectURL(response.data);
+}
+
+/**
+ * Завантажує теплокарту як blob і повертає object URL.
  */
 export async function loadHeatmap(analysisId: number): Promise<string> {
   const response = await apiClient.get(`/analyze/${analysisId}/heatmap`, {

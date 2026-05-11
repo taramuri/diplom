@@ -4,17 +4,37 @@ import { User } from '../models';
 import { hashPassword, comparePassword } from '../utils/password';
 import { signToken } from '../utils/jwt';
 import { generateRandomToken, expiresInHours } from '../utils/randomToken';
+import { checkPasswordStrength } from '../utils/passwordStrength';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService';
 import { ApiError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
-const VERIFICATION_EXPIRES_HOURS = 24;
+// Один інтервал чекання для всіх типів email-розсилок
+const EMAIL_COOLDOWN_SECONDS = 90;
+const VERIFICATION_EXPIRES_HOURS = 1;
 const PASSWORD_RESET_EXPIRES_HOURS = 1;
 
 /**
+ * Перевіряє чи можна надіслати email цьому юзеру (rate limit за 90 секунд).
+ * Кидає ApiError 429 якщо ще зарано.
+ */
+function assertEmailCooldown(user: User): void {
+  if (!user.last_email_sent_at) return;
+  const sinceMs = Date.now() - user.last_email_sent_at.getTime();
+  const sinceSeconds = Math.floor(sinceMs / 1000);
+  if (sinceSeconds < EMAIL_COOLDOWN_SECONDS) {
+    const retryAfter = EMAIL_COOLDOWN_SECONDS - sinceSeconds;
+    const err = new ApiError(
+      429,
+      `Зачекай ${retryAfter} секунд перед повторною спробою`,
+      { code: 'RATE_LIMITED', retry_after_seconds: retryAfter }
+    );
+    throw err;
+  }
+}
+
+/**
  * POST /api/auth/register
- * Створює нового користувача, надсилає лист з підтвердженням.
- * НЕ повертає токен — користувач має спочатку підтвердити email.
  */
 export async function register(
   req: Request,
@@ -29,6 +49,14 @@ export async function register(
       throw new ApiError(409, 'Email вже зареєстровано');
     }
 
+    // Перевірка складності пароля
+    const strength = checkPasswordStrength(password, { email, name });
+    if (!strength.isValid) {
+      throw new ApiError(400, 'Пароль не відповідає вимогам безпеки', {
+        issues: strength.issues,
+      });
+    }
+
     const password_hash = await hashPassword(password);
     const verification_token = generateRandomToken();
     const verification_token_expires = expiresInHours(VERIFICATION_EXPIRES_HOURS);
@@ -40,9 +68,9 @@ export async function register(
       email_verified: false,
       verification_token,
       verification_token_expires,
+      last_email_sent_at: new Date(),
     });
 
-    // Надсилаємо лист — якщо не вдалось, видаляємо юзера і кидаємо помилку
     try {
       await sendVerificationEmail(email, user.name, verification_token);
     } catch (emailErr) {
@@ -66,7 +94,6 @@ export async function register(
 
 /**
  * POST /api/auth/login
- * Логін: повертає JWT, але тільки для верифікованих email.
  */
 export async function login(
   req: Request,
@@ -87,7 +114,6 @@ export async function login(
     }
 
     if (!user.email_verified) {
-      // Спеціальний код помилки щоб фронт міг показати кнопку "надіслати знову"
       res.status(403).json({
         error: 'Email не підтверджено',
         code: 'EMAIL_NOT_VERIFIED',
@@ -109,10 +135,6 @@ export async function login(
   }
 }
 
-/**
- * GET /api/auth/me
- * Повертає поточного користувача.
- */
 export async function getMe(
   req: Request,
   res: Response,
@@ -131,7 +153,6 @@ export async function getMe(
 
 /**
  * POST /api/auth/verify-email
- * Тіло: { token }. Підтверджує email.
  */
 export async function verifyEmail(
   req: Request,
@@ -158,7 +179,6 @@ export async function verifyEmail(
       verification_token_expires: null,
     });
 
-    // Логінимо одразу — повертаємо токен
     const jwtToken = signToken({
       user_id: user.id,
       email: user.email,
@@ -178,7 +198,9 @@ export async function verifyEmail(
 
 /**
  * POST /api/auth/resend-verification
- * Тіло: { email }. Генерує новий токен і надсилає лист.
+ *
+ * Тепер РОЗКРИВАЄ чи email зареєстровано — UX важливіший за email enumeration
+ * (для цього диплома з обмеженою аудиторією це прийнятний trade-off).
  */
 export async function resendVerification(
   req: Request,
@@ -189,20 +211,32 @@ export async function resendVerification(
     const { email } = req.body;
 
     const user = await User.findOne({ where: { email } });
-    // Не розкриваємо чи юзер існує — однакова відповідь для безпеки
-    const successResponse = {
-      message: 'Якщо email зареєстровано і не підтверджено — надіслали новий лист.',
-    };
-
-    if (!user || user.email_verified) {
-      res.json(successResponse);
-      return;
+    if (!user) {
+      throw new ApiError(
+        404,
+        'Користувача з такою поштою не знайдено. Можливо, ти ще не реєструвалась?',
+        { code: 'EMAIL_NOT_FOUND' }
+      );
     }
+
+    if (user.email_verified) {
+      throw new ApiError(
+        400,
+        'Email вже підтверджено — можна одразу логінитись.',
+        { code: 'ALREADY_VERIFIED' }
+      );
+    }
+
+    assertEmailCooldown(user);
 
     const verification_token = generateRandomToken();
     const verification_token_expires = expiresInHours(VERIFICATION_EXPIRES_HOURS);
 
-    await user.update({ verification_token, verification_token_expires });
+    await user.update({
+      verification_token,
+      verification_token_expires,
+      last_email_sent_at: new Date(),
+    });
 
     try {
       await sendVerificationEmail(email, user.name, verification_token);
@@ -212,7 +246,7 @@ export async function resendVerification(
     }
 
     logger.info(`Verification email resent to ${email}`);
-    res.json(successResponse);
+    res.json({ message: 'Новий лист надіслано. Перевір пошту.' });
   } catch (err) {
     next(err);
   }
@@ -220,7 +254,9 @@ export async function resendVerification(
 
 /**
  * POST /api/auth/forgot-password
- * Тіло: { email }. Надсилає лист зі скиданням паролю.
+ *
+ * Так само РОЗКРИВАЄ існування email — якщо клієнт не памʼятає на яку
+ * адресу реєструвався, краще йому одразу про це сказати.
  */
 export async function forgotPassword(
   req: Request,
@@ -231,20 +267,24 @@ export async function forgotPassword(
     const { email } = req.body;
 
     const user = await User.findOne({ where: { email } });
-    // Не розкриваємо чи email зареєстровано
-    const successResponse = {
-      message: 'Якщо email зареєстровано — надіслали лист зі скиданням паролю.',
-    };
-
     if (!user) {
-      res.json(successResponse);
-      return;
+      throw new ApiError(
+        404,
+        'Користувача з такою поштою не знайдено. Можливо, ти ще не реєструвалась?',
+        { code: 'EMAIL_NOT_FOUND' }
+      );
     }
+
+    assertEmailCooldown(user);
 
     const password_reset_token = generateRandomToken();
     const password_reset_expires = expiresInHours(PASSWORD_RESET_EXPIRES_HOURS);
 
-    await user.update({ password_reset_token, password_reset_expires });
+    await user.update({
+      password_reset_token,
+      password_reset_expires,
+      last_email_sent_at: new Date(),
+    });
 
     try {
       await sendPasswordResetEmail(email, user.name, password_reset_token);
@@ -254,7 +294,7 @@ export async function forgotPassword(
     }
 
     logger.info(`Password reset email sent to ${email}`);
-    res.json(successResponse);
+    res.json({ message: 'Лист зі скиданням паролю надіслано. Перевір пошту.' });
   } catch (err) {
     next(err);
   }
@@ -262,7 +302,6 @@ export async function forgotPassword(
 
 /**
  * POST /api/auth/reset-password
- * Тіло: { token, new_password }. Скидає пароль за токеном.
  */
 export async function resetPassword(
   req: Request,
@@ -281,6 +320,17 @@ export async function resetPassword(
 
     if (!user) {
       throw new ApiError(400, 'Недійсний або прострочений токен скидання паролю');
+    }
+
+    // Перевірка складності
+    const strength = checkPasswordStrength(new_password, {
+      email: user.email,
+      name: user.name,
+    });
+    if (!strength.isValid) {
+      throw new ApiError(400, 'Пароль не відповідає вимогам безпеки', {
+        issues: strength.issues,
+      });
     }
 
     const password_hash = await hashPassword(new_password);

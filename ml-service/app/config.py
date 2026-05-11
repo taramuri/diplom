@@ -1,32 +1,32 @@
-"""Налаштування ML-сервісу через змінні середовища."""
+"""Конфігурація через pydantic-settings (читає з env vars / .env)."""
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Модель
-    MODEL_PATH: str = 'models/efficientnet_b0_synthdetect.pth'
-    MODEL_VERSION: str = 'efficientnet_b0_v1.0'
-    DEVICE: str = 'auto'  # 'auto', 'cuda', 'cpu'
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
-    # Сервер
+    # === Server ===
     HOST: str = '0.0.0.0'
     PORT: int = 8000
+    DEVICE: str = 'cpu'  # 'cpu' або 'cuda'
 
-    # Обмеження
+    # === Image processing ===
+    IMAGE_SIZE: int = 224
     MAX_FILE_SIZE_MB: int = 10
 
-    # CORS
-    CORS_ORIGINS: list[str] = ['http://localhost:3000']
+    # === Models ===
+    # MODEL_PATH = шлях до EfficientNet-B0 (зберігається для зворотньої сумісності)
+    MODEL_PATH: str = '/app/models/efficientnet_b0_synthdetect_v2.pth'
+    MODEL_PATH_R50: Optional[str] = '/app/models/resnet50_synthdetect.pth'
+    MODEL_PATH_VIT: Optional[str] = '/app/models/vit_b16_synthdetect.pth'
 
-    # Параметри препроцесингу (мають збігатися з тренуванням)
-    IMAGE_SIZE: int = 224
-    CLASSIFICATION_THRESHOLD: float = 0.5
+    # Версія ансамблю — повертається у API і записується в Analysis.model_version
+    MODEL_VERSION: str = 'ensemble_b0_r50_vit_v1.0'
 
-    @property
-    def max_file_size_bytes(self) -> int:
-        return self.MAX_FILE_SIZE_MB * 1024 * 1024
-
-    model_config = SettingsConfigDict(env_file='.env', case_sensitive=False)
+    # === Inference ===
+    # Поріг для визначення вердикту (probability_synthetic >= threshold → synthetic)
+    DECISION_THRESHOLD: float = 0.5
 
 
 settings = Settings()

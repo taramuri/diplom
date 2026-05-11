@@ -15,6 +15,7 @@ export interface UserAttributes {
   verification_token_expires: Date | null;
   password_reset_token: string | null;
   password_reset_expires: Date | null;
+  last_email_sent_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -31,6 +32,7 @@ export interface UserCreationAttributes
     | 'verification_token_expires'
     | 'password_reset_token'
     | 'password_reset_expires'
+    | 'last_email_sent_at'
     | 'created_at'
     | 'updated_at'
   > {}
@@ -50,10 +52,10 @@ export class User
   declare verification_token_expires: Date | null;
   declare password_reset_token: string | null;
   declare password_reset_expires: Date | null;
+  declare last_email_sent_at: Date | null;
   declare readonly created_at: Date;
   declare readonly updated_at: Date;
 
-  /** Безпечне представлення для відповіді API (без приватних полів). */
   toSafeJSON() {
     return {
       id: this.id,
@@ -93,6 +95,7 @@ User.init(
     verification_token_expires: { type: DataTypes.DATE, allowNull: true },
     password_reset_token: { type: DataTypes.STRING(64), allowNull: true },
     password_reset_expires: { type: DataTypes.DATE, allowNull: true },
+    last_email_sent_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false },
     updated_at: { type: DataTypes.DATE, allowNull: false },
   },

@@ -1,120 +1,242 @@
-"""Завантаження моделі і inference."""
-import io
+"""
+Ensemble Model Service: EfficientNet-B0 + ResNet-50 + ViT-B/16.
+
+Preprocess робиться інлайн (без залежності від preprocess.py):
+- Resize коротшої сторони до 256
+- CenterCrop до 224×224
+- Normalize ImageNet (mean/std)
+
+Це consistent з eval_transform у train_ensemble_notebook.
+"""
 import base64
 import logging
+import time
 from pathlib import Path
+from typing import Dict, List, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
-from torchvision import models
 from PIL import Image
+from torchvision import transforms
+from torchvision.models import efficientnet_b0, resnet50
 
-from app.config import settings
-from app.preprocess import build_eval_transform, preprocess_image
-from app.gradcam import generate_heatmap
+from .config import settings
+from .gradcam import generate_heatmap
 
 logger = logging.getLogger(__name__)
 
-# Порядок класів з ImageFolder (алфавітний): FAKE=0, REAL=1
-DEFAULT_CLASSES = ['FAKE', 'REAL']
-FAKE_CLASS_IDX = 0
-REAL_CLASS_IDX = 1
+CLASS_SYNTHETIC = 0
+CLASS_REAL = 1
+
+# ViT може бути недоступним у старих torchvision (< 0.13)
+try:
+    from torchvision.models import vit_b_16
+    VIT_AVAILABLE = True
+except ImportError:
+    VIT_AVAILABLE = False
+    logger.warning("ViT-B/16 недоступна в цьому torchvision. Оновити: pip install torchvision>=0.13")
+
+# Стандартна нормалізація ImageNet (всі 3 моделі тренувались з нею)
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
-def _resolve_device(device_setting: str) -> torch.device:
-    if device_setting == 'auto':
-        return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    return torch.device(device_setting)
-
-
-def _build_efficientnet_b0(num_classes: int = 2) -> nn.Module:
-    """EfficientNet-B0 без pretrained ваг (вони підвантажаться з checkpoint)."""
-    model = models.efficientnet_b0(weights=None)
+def _create_efficientnet_b0(num_classes: int = 2) -> nn.Module:
+    model = efficientnet_b0(weights=None)
     in_features = model.classifier[1].in_features
-    model.classifier[1] = nn.Linear(in_features, num_classes)
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=0.2, inplace=True),
+        nn.Linear(in_features, num_classes),
+    )
     return model
 
 
+def _create_resnet50(num_classes: int = 2) -> nn.Module:
+    model = resnet50(weights=None)
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    return model
+
+
+def _create_vit_b16(num_classes: int = 2) -> nn.Module:
+    if not VIT_AVAILABLE:
+        raise RuntimeError("ViT-B/16 недоступна")
+    model = vit_b_16(weights=None)
+    model.heads.head = nn.Linear(model.heads.head.in_features, num_classes)
+    return model
+
+
+class LoadedModel:
+    """Одна завантажена модель + target layer для Grad-CAM (якщо є)."""
+
+    def __init__(
+        self,
+        name: str,
+        model: nn.Module,
+        target_layer_for_cam: Optional[nn.Module] = None,
+    ):
+        self.name = name
+        self.model = model
+        self.target_layer_for_cam = target_layer_for_cam
+
+    @torch.no_grad()
+    def predict_proba(self, input_tensor: torch.Tensor) -> np.ndarray:
+        logits = self.model(input_tensor)
+        return torch.softmax(logits, dim=1)[0].cpu().numpy()
+
+
 class ModelService:
-    """Інкапсулює завантаження моделі та одиничний inference."""
+    """Ensemble inference + Grad-CAM."""
 
     def __init__(self) -> None:
-        self.model: nn.Module | None = None
-        self.device: torch.device = _resolve_device(settings.DEVICE)
-        self.classes: list[str] = DEFAULT_CLASSES
-        self.transform = build_eval_transform(settings.IMAGE_SIZE)
-        self._target_layer: nn.Module | None = None
+        self.device = torch.device(settings.DEVICE)
+        self.models: List[LoadedModel] = []
+        self.gradcam_model: Optional[LoadedModel] = None
 
-    @property
-    def is_loaded(self) -> bool:
-        return self.model is not None
+        # Preprocess pipeline — інлайн, без залежності від preprocess.py
+        # Збігається з eval_transform у train_ensemble_notebook
+        self.transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(settings.IMAGE_SIZE),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        ])
 
-    def load(self) -> None:
-        """Завантажує модель з диска. Викликається при старті сервісу."""
-        model_path = Path(settings.MODEL_PATH)
-        if not model_path.exists():
-            logger.error(f'Model file not found: {model_path}')
-            raise FileNotFoundError(
-                f'Model file not found: {model_path}. '
-                f'Train the model first (see ml-training/training_notebook.ipynb) '
-                f'and place the .pth file at {model_path}.'
+        self._load_all()
+
+    def _try_load(
+        self,
+        path: Optional[str],
+        factory,
+        name: str,
+        cam_layer_fn=None,
+    ) -> Optional[LoadedModel]:
+        if not path or not Path(path).exists():
+            logger.warning(f"  ✗ {name}: файл не знайдено ({path}) — пропускаю")
+            return None
+        try:
+            model = factory()
+            state = torch.load(path, map_location=self.device, weights_only=True)
+            if isinstance(state, dict) and 'model_state_dict' in state:
+                state = state['model_state_dict']
+            model.load_state_dict(state)
+            model = model.to(self.device).eval()
+
+            cam_layer = cam_layer_fn(model) if cam_layer_fn else None
+
+            n_params = sum(p.numel() for p in model.parameters())
+            logger.info(f"  ✓ {name}: завантажено ({n_params:,} params)")
+            return LoadedModel(name, model, cam_layer)
+        except Exception as e:
+            logger.error(f"  ✗ {name}: помилка завантаження — {e}")
+            return None
+
+    def _load_all(self) -> None:
+        logger.info(f"Завантажую моделі ансамблю на {self.device}...")
+
+        em = self._try_load(
+            settings.MODEL_PATH,
+            _create_efficientnet_b0,
+            'EfficientNet-B0',
+            cam_layer_fn=lambda m: m.features[-1],
+        )
+        if em:
+            self.models.append(em)
+            self.gradcam_model = em
+
+        em = self._try_load(
+            settings.MODEL_PATH_R50,
+            _create_resnet50,
+            'ResNet-50',
+            cam_layer_fn=lambda m: m.layer4[-1],
+        )
+        if em:
+            self.models.append(em)
+            if self.gradcam_model is None:
+                self.gradcam_model = em
+
+        if VIT_AVAILABLE:
+            em = self._try_load(
+                settings.MODEL_PATH_VIT,
+                _create_vit_b16,
+                'ViT-B/16',
+                cam_layer_fn=None,
+            )
+            if em:
+                self.models.append(em)
+
+        if not self.models:
+            raise RuntimeError(
+                'Жодну модель не завантажено! Перевір MODEL_PATH, MODEL_PATH_R50, '
+                'MODEL_PATH_VIT і чи є .pth файли у /app/models/'
             )
 
-        logger.info(f'Loading model from {model_path} on {self.device}...')
-        model = _build_efficientnet_b0(num_classes=2)
-        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.to(self.device)
-        model.eval()
-
-        self.model = model
-        self._target_layer = model.features[-1]  # останній conv-блок для Grad-CAM
-
-        if 'classes' in checkpoint:
-            self.classes = checkpoint['classes']
-            logger.info(f'Loaded classes from checkpoint: {self.classes}')
-
-        logger.info('✓ Model loaded successfully')
-
-    def classify(self, image_bytes: bytes) -> dict:
-        """
-        Виконує класифікацію одного зображення + Grad-CAM.
-
-        Returns dict with: verdict, probability_synthetic, heatmap_png_base64
-        """
-        if not self.is_loaded or self.model is None or self._target_layer is None:
-            raise RuntimeError('Model is not loaded')
-
-        # Декодуємо зображення
-        image = Image.open(io.BytesIO(image_bytes))
-        input_tensor, rgb_image = preprocess_image(image, self.transform)
-        input_tensor = input_tensor.to(self.device)
-
-        # Forward pass для отримання ймовірностей
-        with torch.no_grad():
-            logits = self.model(input_tensor)
-            probs = torch.softmax(logits, dim=1)[0]
-
-        prob_fake = float(probs[FAKE_CLASS_IDX].item())
-        verdict = 'synthetic' if prob_fake >= settings.CLASSIFICATION_THRESHOLD else 'real'
-
-        # Grad-CAM (потребує grad-обчислень, тому окремий forward поза no_grad)
-        heatmap_png = generate_heatmap(
-            model=self.model,
-            target_layer=self._target_layer,
-            input_tensor=input_tensor,
-            target_class=FAKE_CLASS_IDX,
-            original_image=rgb_image,
-            image_size=settings.IMAGE_SIZE,
+        model_names = [m.name for m in self.models]
+        logger.info(
+            f"✓ Ансамбль готовий: {len(self.models)} моделей — {model_names}"
         )
-        heatmap_b64 = base64.b64encode(heatmap_png).decode('utf-8')
+        if self.gradcam_model:
+            logger.info(f"✓ Grad-CAM джерело: {self.gradcam_model.name}")
+        else:
+            logger.warning("⚠ Grad-CAM недоступний (немає CNN моделей)")
+
+    def _preprocess(self, image: Image.Image) -> torch.Tensor:
+        """Препроцесинг — гарантує RGB, потім transform pipeline."""
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        return self.transform(image).unsqueeze(0).to(self.device)
+
+    def predict(self, image: Image.Image) -> Dict:
+        t0 = time.time()
+
+        # Препроцесинг (інлайн)
+        input_tensor = self._preprocess(image)
+
+        # Передбачення кожної моделі окремо
+        per_model: Dict[str, float] = {}
+        synth_probs: List[float] = []
+        for em in self.models:
+            probs = em.predict_proba(input_tensor)
+            p_synth = float(probs[CLASS_SYNTHETIC])
+            per_model[em.name] = p_synth
+            synth_probs.append(p_synth)
+
+        # Ансамбль: середнє ймовірностей "synthetic"
+        ensemble_p_synth = float(np.mean(synth_probs))
+        verdict = 'synthetic' if ensemble_p_synth >= settings.DECISION_THRESHOLD else 'real'
+
+        # Grad-CAM з пріоритетної CNN
+        heatmap_base64: Optional[str] = None
+        if self.gradcam_model and self.gradcam_model.target_layer_for_cam is not None:
+            target_class = CLASS_SYNTHETIC if verdict == 'synthetic' else CLASS_REAL
+            try:
+                heatmap_bytes = generate_heatmap(
+                    model=self.gradcam_model.model,
+                    target_layer=self.gradcam_model.target_layer_for_cam,
+                    input_tensor=input_tensor,
+                    target_class=target_class,
+                    original_image=image,
+                    image_size=settings.IMAGE_SIZE,
+                )
+                heatmap_base64 = base64.b64encode(heatmap_bytes).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Grad-CAM error: {e}")
+
+        processing_time_ms = int((time.time() - t0) * 1000)
 
         return {
             'verdict': verdict,
-            'probability_synthetic': prob_fake,
-            'heatmap_png_base64': heatmap_b64,
+            'probability_synthetic': ensemble_p_synth,
+            'model_version': settings.MODEL_VERSION,
+            'processing_time_ms': processing_time_ms,
+            'heatmap_png_base64': heatmap_base64,
+            'model_predictions': per_model,
         }
 
+    @property
+    def is_ready(self) -> bool:
+        return len(self.models) > 0
 
-# Глобальний інстанс — завантажується при старті FastAPI
-model_service = ModelService()
+    @property
+    def loaded_model_names(self) -> List[str]:
+        return [m.name for m in self.models]

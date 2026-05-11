@@ -8,6 +8,16 @@ export async function updateProfile(
   return data.user;
 }
 
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  await apiClient.post('/auth/me/password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
 export async function uploadAvatar(file: File): Promise<User> {
   const formData = new FormData();
   formData.append('avatar', file);
@@ -23,9 +33,6 @@ export async function deleteAvatar(): Promise<User> {
   return data.user;
 }
 
-/**
- * Завантажує аватар як blob, повертає object URL для <img src="...">.
- */
 export async function loadAvatar(): Promise<string> {
   const response = await apiClient.get('/auth/me/avatar', { responseType: 'blob' });
   return URL.createObjectURL(response.data);
