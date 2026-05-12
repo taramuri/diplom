@@ -1,20 +1,36 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState, KeyboardEvent } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Analysis } from '../types';
-import { getAnalysis, loadHeatmap } from '../api/analyze';
+import {
+  getAnalysis,
+  loadHeatmap,
+  renameAnalysis,
+  deleteAnalysis,
+} from '../api/analyze';
 import { ImagePreview } from '../components/ImagePreview';
 import { Spinner } from '../components/Spinner';
+import { PencilIcon, TrashIcon, CheckIcon, XIcon } from '../components/Icons';
 import { formatProbability, formatDate } from '../utils/format';
 
 export function AnalysisDetailPage() {
   const { id: idParam } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
+
+  // Rename state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  // Delete state
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!idParam) {
@@ -31,7 +47,10 @@ export function AnalysisDetailPage() {
 
     setLoading(true);
     getAnalysis(id)
-      .then(setAnalysis)
+      .then((a) => {
+        setAnalysis(a);
+        setEditedName(a.filename);
+      })
       .catch((err) => {
         if (axios.isAxiosError(err)) {
           if (err.response?.status === 404) setError('Аналіз не знайдено');
@@ -45,9 +64,7 @@ export function AnalysisDetailPage() {
   }, [idParam]);
 
   useEffect(() => {
-    if (!analysis || analysis.status !== 'completed' || !analysis.heatmap_url) {
-      return;
-    }
+    if (!analysis || analysis.status !== 'completed' || !analysis.heatmap_url) return;
     let revoked: string | null = null;
     setHeatmapLoading(true);
     loadHeatmap(analysis.id)
@@ -57,11 +74,58 @@ export function AnalysisDetailPage() {
       })
       .catch(() => setHeatmapUrl(null))
       .finally(() => setHeatmapLoading(false));
-
     return () => {
       if (revoked) URL.revokeObjectURL(revoked);
     };
   }, [analysis]);
+
+  const handleSaveName = async () => {
+    if (!analysis) return;
+    const trimmed = editedName.trim();
+    if (!trimmed || trimmed === analysis.filename) {
+      setEditedName(analysis.filename);
+      setIsEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const updated = await renameAnalysis(analysis.id, trimmed);
+      setAnalysis(updated);
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('Rename failed', err);
+      setEditedName(analysis.filename);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleCancelName = () => {
+    if (!analysis) return;
+    setEditedName(analysis.filename);
+    setIsEditingName(false);
+  };
+
+  const handleNameKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSaveName();
+    if (e.key === 'Escape') handleCancelName();
+  };
+
+  const handleDelete = async () => {
+    if (!analysis) return;
+    if (!window.confirm(`Видалити аналіз «${analysis.filename}»? Цю дію не можна скасувати.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteAnalysis(analysis.id);
+      navigate('/history', { replace: true });
+    } catch (err) {
+      console.error('Delete failed', err);
+      alert('Не вдалось видалити аналіз. Повторіть спробу.');
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -75,9 +139,7 @@ export function AnalysisDetailPage() {
     return (
       <div className="max-w-5xl mx-auto px-6 py-12 text-center">
         <p className="text-red-700 mb-4">{error}</p>
-        <Link to="/history" className="text-primary-700 hover:text-primary-900">
-          ← До історії
-        </Link>
+        <Link to="/history" className="text-primary-700 hover:text-primary-900">← До історії</Link>
       </div>
     );
   }
@@ -91,29 +153,80 @@ export function AnalysisDetailPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      <Link
-        to="/history"
-        className="text-sm text-primary-700 hover:text-primary-900 inline-flex items-center gap-1"
-      >
+      <Link to="/history" className="text-sm text-primary-700 hover:text-primary-900 inline-flex items-center gap-1">
         ← До історії
       </Link>
 
-      <div className="flex items-start justify-between mt-4 mb-6">
-        <div>
+      <div className="flex items-start justify-between gap-4 mt-4 mb-6 flex-wrap">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-gray-800">Аналіз #{analysis.id}</h1>
-          <p className="text-sm text-gray-500 break-all mt-1">{analysis.filename}</p>
+          <div className="mt-2 flex items-center gap-2">
+            {isEditingName ? (
+              <>
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  onKeyDown={handleNameKeyDown}
+                  onBlur={handleSaveName}
+                  maxLength={200}
+                  autoFocus
+                  disabled={savingName}
+                  className="flex-1 px-3 py-1.5 border border-primary-400 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveName}
+                  disabled={savingName}
+                  className="p-1.5 text-green-700 hover:bg-green-100 rounded"
+                  title="Зберегти"
+                >
+                  <CheckIcon size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelName}
+                  className="p-1.5 text-gray-500 hover:bg-gray-200 rounded"
+                  title="Скасувати"
+                >
+                  <XIcon size={16} />
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 break-all">{analysis.filename}</p>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  className="p-1 text-gray-400 hover:text-primary-700 hover:bg-gray-100 rounded"
+                  title="Змінити назву"
+                >
+                  <PencilIcon size={14} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
-        <span className="text-xs text-gray-500 whitespace-nowrap">
-          {formatDate(analysis.created_at)}
-        </span>
+        <div className="flex items-start gap-3 flex-shrink-0">
+          <span className="text-xs text-gray-500 whitespace-nowrap pt-2">
+            {formatDate(analysis.created_at)}
+          </span>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="px-3 py-1.5 text-sm text-red-700 border border-red-300 rounded hover:bg-red-50 transition-colors flex items-center gap-1 disabled:opacity-50"
+            title="Видалити аналіз"
+          >
+            <TrashIcon size={14} />
+            <span>Видалити</span>
+          </button>
+        </div>
       </div>
 
-      {/* Verdict + Probability */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         {analysis.verdict && (
-          <div
-            className={`inline-block px-4 py-2 rounded-lg border font-semibold mb-4 ${verdictBadgeClass}`}
-          >
+          <div className={`inline-block px-4 py-2 rounded-lg border font-semibold mb-4 ${verdictBadgeClass}`}>
             {isSynthetic ? '⚠ Синтетичне зображення' : '✓ Реальне зображення'}
           </div>
         )}
@@ -124,9 +237,7 @@ export function AnalysisDetailPage() {
             <div className="flex items-center gap-3">
               <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
                 <div
-                  className={`h-full transition-all ${
-                    isSynthetic ? 'bg-red-500' : 'bg-green-500'
-                  }`}
+                  className={`h-full transition-all ${isSynthetic ? 'bg-red-500' : 'bg-green-500'}`}
                   style={{ width: `${analysis.probability_synthetic * 100}%` }}
                 />
               </div>
@@ -161,7 +272,6 @@ export function AnalysisDetailPage() {
         </div>
       </div>
 
-      {/* Original + Heatmap side-by-side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-sm p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Оригінал</h3>
@@ -173,9 +283,7 @@ export function AnalysisDetailPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-1">
-            Теплова карта (Grad-CAM)
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-1">Теплова карта (Grad-CAM)</h3>
           <p className="text-xs text-gray-500 mb-3">
             Червоні зони — найвпливовіші для рішення моделі
           </p>
@@ -185,11 +293,7 @@ export function AnalysisDetailPage() {
             </div>
           )}
           {heatmapUrl && (
-            <img
-              src={heatmapUrl}
-              alt="Grad-CAM heatmap"
-              className="w-full rounded border border-gray-200"
-            />
+            <img src={heatmapUrl} alt="Grad-CAM heatmap" className="w-full rounded border border-gray-200" />
           )}
           {!heatmapLoading && !heatmapUrl && (
             <p className="text-sm text-gray-500">Теплокарта недоступна</p>

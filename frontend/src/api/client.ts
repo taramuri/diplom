@@ -5,7 +5,7 @@ const TOKEN_KEY = 'synthdetect_token';
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 90_000, // 90s — ML inference може зайняти кілька секунд
+  timeout: 90_000,
 });
 
 export function getToken(): string | null {

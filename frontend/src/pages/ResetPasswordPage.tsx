@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { resetPassword } from '../api/auth';
 import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
+import { PasswordInput } from '../components/PasswordInput';
 import { checkPasswordStrength } from '../utils/passwordStrength';
 
 export function ResetPasswordPage() {
@@ -15,6 +16,9 @@ export function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const inputClass =
+    'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,14 +82,13 @@ export function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Новий пароль</label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
               maxLength={128}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="мінімум 8 символів"
               autoComplete="new-password"
             />
@@ -93,17 +96,14 @@ export function ResetPasswordPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Повтори пароль
-            </label>
-            <input
-              type="password"
+            <label className="block text-sm font-medium text-gray-700 mb-1">Повтори пароль</label>
+            <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={8}
               maxLength={128}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               autoComplete="new-password"
             />
             {confirmPassword && password !== confirmPassword && (
@@ -112,9 +112,7 @@ export function ResetPasswordPage() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">{error}</div>
           )}
 
           <button
@@ -127,9 +125,7 @@ export function ResetPasswordPage() {
         </form>
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          <Link to="/login" className="text-primary-700 hover:text-primary-900">
-            ← На сторінку входу
-          </Link>
+          <Link to="/login" className="text-primary-700 hover:text-primary-900">← На сторінку входу</Link>
         </p>
       </div>
     </div>

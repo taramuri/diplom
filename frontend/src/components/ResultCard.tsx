@@ -39,12 +39,12 @@ export function ResultCard({ analysis }: ResultCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-start justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-800">Результат аналізу</h3>
+        <h3 className="text-lg font-semibold text-gray-800">Результати аналізу</h3>
         <span className="text-xs text-gray-500">{formatDate(analysis.created_at)}</span>
       </div>
 
       <div className="mb-4">
-        <p className="text-xs text-gray-500 mb-1">Файл</p>
+        <p className="text-xs text-gray-500 mb-1">Назва файлу</p>
         <p className="font-medium text-gray-800 break-all">{analysis.filename}</p>
       </div>
 
@@ -101,7 +101,7 @@ export function ResultCard({ analysis }: ResultCardProps) {
           Теплова карта (Grad-CAM)
         </p>
         <p className="text-xs text-gray-500 mb-3">
-          Червоні зони — ділянки які найбільше вплинули на рішення моделі
+          Червоні зони позначають ділянки, які найбільше вплинули на результат аналізу
         </p>
         {heatmapLoading && (
           <div className="flex items-center justify-center h-64 bg-gray-50 rounded">

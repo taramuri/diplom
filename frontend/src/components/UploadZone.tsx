@@ -20,7 +20,7 @@ export function UploadZone({ onUpload, isDisabled }: UploadZoneProps) {
       return;
     }
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setError(`Файл завеликий. Максимум ${MAX_SIZE_MB} МБ.`);
+      setError(`Розмір файлу перевищує допустимий ліміт (${MAX_SIZE_MB} МБ).`);
       return;
     }
     onUpload(file);
@@ -86,10 +86,10 @@ export function UploadZone({ onUpload, isDisabled }: UploadZoneProps) {
           Завантажте зображення для аналізу
         </p>
         <p className="text-sm text-gray-500 mt-1">
-          Перетягни сюди або клікни для вибору
+          Перетягніть файл у цю область або натисніть для вибору
         </p>
         <p className="text-xs text-gray-400 mt-2">
-          JPEG, PNG, WebP — до {MAX_SIZE_MB} МБ
+          Підтримувані формати: JPEG, PNG, WebP. Максимальний розмір файлу - {MAX_SIZE_MB} МБ
         </p>
       </div>
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

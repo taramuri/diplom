@@ -1,33 +1,26 @@
 import { useState, FormEvent, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import {
-  updateProfile,
-  uploadAvatar,
-  deleteAvatar,
-  changePassword,
-} from '../api/profile';
+import { updateProfile, uploadAvatar, deleteAvatar, changePassword } from '../api/profile';
 import { Avatar } from '../components/Avatar';
 import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
+import { PasswordInput } from '../components/PasswordInput';
 import { checkPasswordStrength } from '../utils/passwordStrength';
 
 export function ProfilePage() {
   const { user, setUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Profile fields
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Avatar
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [avatarRefreshKey, setAvatarRefreshKey] = useState(0);
 
-  // Password change
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -36,6 +29,9 @@ export function ProfilePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   if (!user) return null;
+
+  const inputClass =
+    'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
 
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,13 +42,11 @@ export function ProfilePage() {
       const updates: { name?: string | null; email?: string } = {};
       if (name !== (user.name ?? '')) updates.name = name || null;
       if (email !== user.email) updates.email = email;
-
       if (Object.keys(updates).length === 0) {
         setProfileSuccess('Без змін');
         setIsSavingProfile(false);
         return;
       }
-
       const updated = await updateProfile(updates);
       setUser(updated);
       setProfileSuccess('Профіль оновлено');
@@ -72,7 +66,6 @@ export function ProfilePage() {
   const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setAvatarError('Дозволено JPEG, PNG, WebP');
       return;
@@ -81,7 +74,6 @@ export function ProfilePage() {
       setAvatarError('Файл завеликий. Максимум 2 МБ');
       return;
     }
-
     setAvatarError(null);
     setIsUploading(true);
     try {
@@ -122,15 +114,13 @@ export function ProfilePage() {
       setPasswordError('Нові паролі не співпадають');
       return;
     }
-
     if (currentPassword === newPassword) {
       setPasswordError('Новий пароль має відрізнятись від поточного');
       return;
     }
-
     const strength = checkPasswordStrength(newPassword, { email: user.email, name: user.name });
     if (!strength.isValid) {
-      setPasswordError('Виправ помилки в паролі: ' + strength.issues.join('; '));
+      setPasswordError('Виправте помилки в паролі: ' + strength.issues.join('; '));
       return;
     }
 
@@ -161,7 +151,6 @@ export function ProfilePage() {
     <div className="max-w-2xl mx-auto px-6 py-8">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Профіль</h1>
 
-      {/* Avatar */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Аватар</h2>
         <div className="flex items-center gap-6">
@@ -197,10 +186,8 @@ export function ProfilePage() {
         </div>
       </div>
 
-      {/* Profile data */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Особисті дані</h2>
-
         <form onSubmit={handleSaveProfile} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Імʼя</label>
@@ -209,11 +196,10 @@ export function ProfilePage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="Як до тебе звертатись"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
@@ -221,24 +207,18 @@ export function ProfilePage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
             />
             {!user.email_verified && (
               <p className="text-xs text-amber-700 mt-1">⚠ Email не підтверджено</p>
             )}
           </div>
-
           {profileError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-              {profileError}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">{profileError}</div>
           )}
           {profileSuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
-              {profileSuccess}
-            </div>
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">{profileSuccess}</div>
           )}
-
           <button
             type="submit"
             disabled={isSavingProfile}
@@ -249,37 +229,28 @@ export function ProfilePage() {
         </form>
       </div>
 
-      {/* Change password */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Зміна паролю</h2>
-
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Поточний пароль
-            </label>
-            <input
-              type="password"
+            <label className="block text-sm font-medium text-gray-700 mb-1">Поточний пароль</label>
+            <PasswordInput
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               autoComplete="current-password"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Новий пароль
-            </label>
-            <input
-              type="password"
+            <label className="block text-sm font-medium text-gray-700 mb-1">Новий пароль</label>
+            <PasswordInput
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={8}
               maxLength={128}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               autoComplete="new-password"
             />
             <PasswordStrengthMeter
@@ -287,37 +258,27 @@ export function ProfilePage() {
               userInfo={{ email: user.email, name: user.name }}
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Повтори новий пароль
-            </label>
-            <input
-              type="password"
+            <label className="block text-sm font-medium text-gray-700 mb-1">Повтори новий пароль</label>
+            <PasswordInput
               value={confirmNewPassword}
               onChange={(e) => setConfirmNewPassword(e.target.value)}
               required
               minLength={8}
               maxLength={128}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               autoComplete="new-password"
             />
             {confirmNewPassword && newPassword !== confirmNewPassword && (
               <p className="text-xs text-red-600 mt-1">Паролі не співпадають</p>
             )}
           </div>
-
           {passwordError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-              {passwordError}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">{passwordError}</div>
           )}
           {passwordSuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">
-              {passwordSuccess}
-            </div>
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded text-sm">{passwordSuccess}</div>
           )}
-
           <button
             type="submit"
             disabled={isChangingPassword}

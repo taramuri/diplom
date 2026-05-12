@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { PasswordStrengthMeter } from '../components/PasswordStrengthMeter';
+import { PasswordInput } from '../components/PasswordInput';
 import { checkPasswordStrength } from '../utils/passwordStrength';
 
 export function RegisterPage() {
@@ -15,11 +16,13 @@ export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const inputClass =
+    'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Перевірка пароля на клієнті перед відправкою
     const strength = checkPasswordStrength(password, { email, name });
     if (!strength.isValid) {
       setError('Виправ помилки в паролі: ' + strength.issues.join('; '));
@@ -64,7 +67,7 @@ export function RegisterPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="Тетяна"
               autoComplete="name"
             />
@@ -77,7 +80,7 @@ export function RegisterPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="user@example.com"
               autoComplete="email"
             />
@@ -85,14 +88,13 @@ export function RegisterPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
               maxLength={128}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="мінімум 8 символів"
               autoComplete="new-password"
             />
@@ -100,9 +102,7 @@ export function RegisterPage() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">{error}</div>
           )}
 
           <button

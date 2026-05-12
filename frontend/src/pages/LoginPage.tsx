@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { resendVerification } from '../api/auth';
+import { PasswordInput } from '../components/PasswordInput';
 
 interface LocationState {
   from?: { pathname: string };
@@ -34,7 +35,7 @@ export function LoginPage() {
       if (axios.isAxiosError(err)) {
         if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
           setNeedsVerification(true);
-          setError('Email ще не підтверджено. Перевір пошту або надішли лист повторно.');
+          setError('Адресу електронної пошти ще не підтверджено. Перевірте пошту або надішліть лист повторно.');
         } else {
           setError(err.response?.data?.error ?? 'Помилка входу');
         }
@@ -50,7 +51,7 @@ export function LoginPage() {
     setResendStatus(null);
     try {
       await resendVerification(email);
-      setResendStatus('Лист надіслано. Перевір пошту (включно з папкою «Спам»).');
+      setResendStatus('Лист із підтвердженням надіслано. Перевірте електронну пошту, включно з папкою «Спам».');
     } catch (err) {
       if (axios.isAxiosError(err)) {
         setResendStatus(err.response?.data?.error ?? 'Не вдалось надіслати');
@@ -59,6 +60,9 @@ export function LoginPage() {
       }
     }
   };
+
+  const inputClass =
+    'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -74,7 +78,7 @@ export function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               placeholder="user@example.com"
               autoComplete="email"
             />
@@ -82,21 +86,18 @@ export function LoginPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+              className={inputClass}
               autoComplete="current-password"
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-sm">{error}</div>
           )}
 
           {needsVerification && (
@@ -128,9 +129,9 @@ export function LoginPage() {
             </Link>
           </p>
           <p>
-            Ще не зареєстрована?{' '}
+            Ще не зареєстровані?{' '}
             <Link to="/register" className="text-primary-700 hover:text-primary-900 font-medium">
-              Створити акаунт
+              Створити обліковий запис
             </Link>
           </p>
         </div>

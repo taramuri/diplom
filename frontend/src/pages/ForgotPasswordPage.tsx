@@ -34,17 +34,16 @@ export function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-primary-900 mb-2">Забув пароль?</h1>
+        <h1 className="text-2xl font-bold text-primary-900 mb-2">Забули пароль?</h1>
         <p className="text-gray-600 mb-6">
-          Введи email — ми надішлемо посилання для скидання паролю.
+          Введіть адресу електронної пошти для отримання посилання на відновлення пароля.
         </p>
 
         {submitted ? (
           <div className="bg-green-50 border border-green-200 px-4 py-4 rounded text-sm text-green-800">
-            <p className="font-medium mb-1">✓ Лист надіслано</p>
+            <p className="font-medium mb-1">✓ Лист успішно надіслано</p>
             <p className="text-green-700">
-              Перевір пошту — клікни посилання у листі для скидання паролю. Посилання
-              дійсне 1 годину.
+              Перевірте електронну пошту та перейдіть за посиланням у листі для відновлення пароля. Посилання дійсне протягом 1 години.
             </p>
             <Link
               to="/login"
@@ -89,7 +88,7 @@ export function ForgotPasswordPage() {
                 disabled={isSubmitting}
                 className="w-full bg-primary-900 text-white py-2 rounded-lg hover:bg-primary-800 transition disabled:opacity-50"
               >
-                {isSubmitting ? 'Відправляю…' : 'Надіслати посилання'}
+                {isSubmitting ? 'Надсилання...' : 'Надіслати посилання'}
               </button>
             </form>
 

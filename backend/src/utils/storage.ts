@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { logger } from './logger';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 const IMAGES_DIR = path.join(UPLOAD_DIR, 'images');
@@ -20,7 +21,6 @@ export function mimeToExt(mimetype: string): string {
   return MIME_TO_EXT[mimetype] || 'bin';
 }
 
-/** Зберігає завантажене зображення (для аналізу) на диск. */
 export async function saveImage(
   buffer: Buffer,
   userId: number,
@@ -35,7 +35,6 @@ export async function saveImage(
   return filepath;
 }
 
-/** Декодує base64 PNG (з ML-сервісу) і зберігає на диск. */
 export async function saveHeatmap(
   base64Png: string,
   userId: number,
@@ -48,7 +47,6 @@ export async function saveHeatmap(
   return filepath;
 }
 
-/** Зберігає avatar (фото профілю) на диск. */
 export async function saveAvatar(
   buffer: Buffer,
   userId: number,
@@ -56,7 +54,6 @@ export async function saveAvatar(
 ): Promise<string> {
   await ensureDir(AVATARS_DIR);
   const ext = mimeToExt(mimetype);
-  // Стираємо попередні аватари будь-якого розширення
   for (const oldExt of Object.values(MIME_TO_EXT)) {
     const oldPath = path.join(AVATARS_DIR, `${userId}.${oldExt}`);
     try {
@@ -70,10 +67,22 @@ export async function saveAvatar(
   return filepath;
 }
 
-/** Читає файл за шляхом (heatmap або avatar). */
 export async function readFileBuffer(filepath: string): Promise<Buffer> {
   return fs.readFile(filepath);
 }
 
-// Backwards compat alias
 export const readHeatmap = readFileBuffer;
+
+/**
+ * Безпечно видаляє файл — ігнорує помилку якщо файла нема.
+ */
+export async function deleteFileIfExists(filepath: string | null | undefined): Promise<void> {
+  if (!filepath) return;
+  try {
+    await fs.unlink(filepath);
+  } catch (err: any) {
+    if (err.code !== 'ENOENT') {
+      logger.warn(`Failed to delete file ${filepath}: ${err.message}`);
+    }
+  }
+}

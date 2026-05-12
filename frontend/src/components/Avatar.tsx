@@ -5,7 +5,7 @@ import { User } from '../types';
 interface AvatarProps {
   user: User;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  refreshKey?: number; // змінюй щоб форсити перезавантаження після upload
+  refreshKey?: number; 
 }
 
 const sizeClasses = {
