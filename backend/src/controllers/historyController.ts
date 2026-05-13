@@ -3,7 +3,6 @@ import { Analysis } from '../models';
 
 /**
  * GET /api/history?page=1&limit=20
- * Пагінований список аналізів поточного користувача.
  */
 export async function getHistory(
   req: Request,

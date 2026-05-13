@@ -7,7 +7,6 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Бордовий з твоєї презентації
         primary: {
           50: '#faf5f8',
           100: '#f3e8ee',

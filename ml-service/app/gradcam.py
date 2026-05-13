@@ -9,8 +9,6 @@ from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
 
 
-# Максимальна довжина більшої сторони у вихідному PNG.
-# Більший розмір — гарніше але важчий файл.
 MAX_DISPLAY_DIMENSION = 800
 
 
@@ -20,7 +18,7 @@ def generate_heatmap(
     input_tensor: torch.Tensor,
     target_class: int,
     original_image: Image.Image,
-    image_size: int,  # лишено для сумісності інтерфейсу, не використовується
+    image_size: int,  
 ) -> bytes:
     """
     Будує Grad-CAM heatmap для target_class і накладає на оригінал

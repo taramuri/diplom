@@ -1,7 +1,4 @@
-/**
- * Перевірка складності пароля — клієнтська копія backend/src/utils/passwordStrength.ts.
- * Синхронізуй обидва файли при змінах.
- */
+
 
 const COMMON_PASSWORDS = new Set([
   '123456', 'password', '12345678', 'qwerty', '12345', '123456789',

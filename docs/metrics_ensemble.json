@@ -1,0 +1,90 @@
+{
+  "dataset": "Parveshiiii/AI-vs-Real",
+  "test_size": 1400,
+  "class_mapping": {
+    "0": "synthetic",
+    "1": "real"
+  },
+  "hyperparameters": {
+    "image_size": 224,
+    "batch_size_cnn": 32,
+    "batch_size_vit": 16,
+    "epochs": 5,
+    "lr_start_cnn": 0.0001,
+    "lr_start_vit": 5e-05,
+    "lr_end": 1e-06,
+    "weight_decay": 0.0001,
+    "optimizer": "AdamW",
+    "scheduler": "CosineAnnealingLR"
+  },
+  "models": {
+    "EfficientNet-B0": {
+      "accuracy": 0.9614285714285714,
+      "precision_synth": 0.9320987654320988,
+      "recall_synth": 0.9041916167664671,
+      "f1_synth": 0.9179331306990881,
+      "auc_roc": 0.9900251092561594,
+      "confusion_matrix": [
+        [
+          302,
+          32
+        ],
+        [
+          22,
+          1044
+        ]
+      ]
+    },
+    "ResNet-50": {
+      "accuracy": 0.9971428571428571,
+      "precision_synth": 0.9940119760479041,
+      "recall_synth": 0.9940119760479041,
+      "f1_synth": 0.9940119760479041,
+      "auc_roc": 0.9999325926009145,
+      "confusion_matrix": [
+        [
+          332,
+          2
+        ],
+        [
+          2,
+          1064
+        ]
+      ]
+    },
+    "ViT-B/16": {
+      "accuracy": 0.985,
+      "precision_synth": 0.9671641791044776,
+      "recall_synth": 0.9700598802395209,
+      "f1_synth": 0.968609865470852,
+      "auc_roc": 0.9985591668445473,
+      "confusion_matrix": [
+        [
+          324,
+          10
+        ],
+        [
+          11,
+          1055
+        ]
+      ]
+    },
+    "Ensemble": {
+      "accuracy": 0.995,
+      "precision_synth": 0.990990990990991,
+      "recall_synth": 0.9880239520958084,
+      "f1_synth": 0.9895052473763118,
+      "auc_roc": 0.9998118210108863,
+      "confusion_matrix": [
+        [
+          330,
+          4
+        ],
+        [
+          3,
+          1063
+        ]
+      ]
+    }
+  }
+}

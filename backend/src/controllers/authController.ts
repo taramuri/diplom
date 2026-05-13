@@ -9,7 +9,7 @@ import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email
 import { ApiError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger';
 
-// Один інтервал чекання для всіх типів email-розсилок
+// Один інтервал чекання для всіх типів email-розилок
 const EMAIL_COOLDOWN_SECONDS = 90;
 const VERIFICATION_EXPIRES_HOURS = 1;
 const PASSWORD_RESET_EXPIRES_HOURS = 1;
@@ -78,13 +78,13 @@ export async function register(
       await user.destroy();
       throw new ApiError(
         500,
-        'Не вдалось надіслати лист підтвердження. Спробуй пізніше.'
+        'Не вдалось надіслати лист підтвердження. Спробуйте пізніше.'
       );
     }
 
     logger.info(`New user registered (pending verification): ${email}`);
     res.status(201).json({
-      message: 'Реєстрація успішна. Перевір пошту — ми надіслали лист для підтвердження.',
+      message: 'Реєстрація успішна. Перевірте пошту — ми надіслали лист для підтвердження.',
       email,
     });
   } catch (err) {
@@ -198,9 +198,6 @@ export async function verifyEmail(
 
 /**
  * POST /api/auth/resend-verification
- *
- * Тепер РОЗКРИВАЄ чи email зареєстровано — UX важливіший за email enumeration
- * (для цього диплома з обмеженою аудиторією це прийнятний trade-off).
  */
 export async function resendVerification(
   req: Request,
@@ -214,7 +211,7 @@ export async function resendVerification(
     if (!user) {
       throw new ApiError(
         404,
-        'Користувача з такою поштою не знайдено. Можливо, ти ще не реєструвалась?',
+        'Користувача з такою поштою не знайдено. Можливо, ви ще не реєструвались?',
         { code: 'EMAIL_NOT_FOUND' }
       );
     }
@@ -254,9 +251,6 @@ export async function resendVerification(
 
 /**
  * POST /api/auth/forgot-password
- *
- * Так само РОЗКРИВАЄ існування email — якщо клієнт не памʼятає на яку
- * адресу реєструвався, краще йому одразу про це сказати.
  */
 export async function forgotPassword(
   req: Request,

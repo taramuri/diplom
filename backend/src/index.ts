@@ -31,7 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/analyze', analyzeRoutes);
 app.use('/api/history', historyRoutes);
 
-// Error handling (мають бути останніми)
+// Error handling 
 app.use(notFoundHandler);
 app.use(errorHandler);
 

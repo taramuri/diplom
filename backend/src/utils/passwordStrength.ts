@@ -1,6 +1,5 @@
 /**
  * Перевірка складності пароля.
- * Цей файл дублюється на frontend (src/utils/passwordStrength.ts) — синхронізуй обидва.
  */
 
 const COMMON_PASSWORDS = new Set([
