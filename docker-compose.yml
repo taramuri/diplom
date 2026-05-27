@@ -25,17 +25,8 @@ services:
       dockerfile: Dockerfile
     container_name: synthdetect-ml
     restart: unless-stopped
-    environment:
-      MODEL_PATH: /app/models/efficientnet_b0_synthdetect_v2.pth
-      MODEL_PATH_R50: /app/models/resnet50_synthdetect.pth
-      MODEL_PATH_VIT: /app/models/vit_b16_synthdetect.pth
-      MODEL_VERSION: ensemble_b0_r50_vit_v1.0
-      DEVICE: cpu
-      HOST: 0.0.0.0
-      PORT: 8000
-      MAX_FILE_SIZE_MB: 10
-      IMAGE_SIZE: 224
-      DECISION_THRESHOLD: 0.5 
+    env_file:
+      - ./ml-service/.env
     ports:
       - "8000:8000"
     volumes:

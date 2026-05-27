@@ -8,3 +8,6 @@ venv/
 models/*.pth
 models/*.onnx
 !models/.gitkeep
+tests/test_images/
+tests/*.json
+tests/test_local_images.py

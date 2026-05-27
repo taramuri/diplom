@@ -1,0 +1,42 @@
+{
+  "accuracy": 1.0,
+  "auc_roc": 1.0,
+  "confusion_matrix": [
+    [
+      50,
+      0
+    ],
+    [
+      0,
+      50
+    ]
+  ],
+  "per_class": {
+    "Synthetic": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 50.0
+    },
+    "Real": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 50.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 100.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 100.0
+    }
+  },
+  "n_tested": 100
+}
